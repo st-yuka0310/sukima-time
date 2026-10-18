@@ -1,0 +1,1462 @@
+<title>すきまタイム</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+  /* layout: single centered column, phone-first, bottom tab navigation for 4 focused screens */
+  :root{
+    color-scheme: light;
+    --bg: #eaf5ef;
+    --page: #e3f1ea;
+    --surface: #ffffff;
+    --ink: #16261f;
+    --ink-soft: #4b5c53;
+    --muted: #8a978f;
+    --border: rgba(22,38,31,0.12);
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --accent-soft: #e2edfb;
+    --warning: #c9850a;
+    --warning-soft: #fdf1d9;
+    --good: #0ca30c;
+    --weekday-sun: #c0392b;
+    --remaining: #ebe9df;
+    --series-0: #eb6834;
+    --series-1: #1baf7a;
+    --series-2: #eda100;
+    --series-3: #e87ba4;
+    --series-4: #238823;
+    --series-5: #4a3aa7;
+    --series-6: #e34948;
+    --series-other: #c3c2b7;
+    --fixed-sleep: #96958a;
+    --fixed-school: #b2b1a4;
+    --fixed-other: #cfcec2;
+    --shadow: 0 10px 24px -14px rgba(22,38,31,0.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg: #10201a;
+      --page: #0d1915;
+      --surface: #16281f;
+      --ink: #f1faf5;
+      --ink-soft: #c3d3c9;
+      --muted: #8a978f;
+      --border: rgba(255,255,255,0.12);
+      --accent: #3987e5;
+      --accent-ink: #061018;
+      --accent-soft: #1d3250;
+      --warning: #e7ab3a;
+      --warning-soft: #352a12;
+      --weekday-sun: #e2695c;
+      --remaining: #74726a;
+      --fixed-sleep: #35342f;
+      --fixed-school: #44433c;
+      --fixed-other: #55534a;
+      --series-0: #d95926;
+      --series-1: #199e70;
+      --series-2: #c98500;
+      --series-3: #d55181;
+      --series-4: #2fa52f;
+      --series-5: #9085e9;
+      --series-6: #e66767;
+      --series-other: #383835;
+      --shadow: 0 10px 24px -14px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg: #10201a;
+    --page: #0d1915;
+    --surface: #16281f;
+    --ink: #f1faf5;
+    --ink-soft: #c3d3c9;
+    --muted: #8a978f;
+    --border: rgba(255,255,255,0.12);
+    --accent: #3987e5;
+    --accent-ink: #061018;
+    --accent-soft: #1d3250;
+    --warning: #e7ab3a;
+    --warning-soft: #352a12;
+    --weekday-sun: #e2695c;
+    --remaining: #74726a;
+    --fixed-sleep: #35342f;
+    --fixed-school: #44433c;
+    --fixed-other: #55534a;
+    --series-0: #d95926;
+    --series-1: #199e70;
+    --series-2: #c98500;
+    --series-3: #d55181;
+    --series-4: #2fa52f;
+    --series-5: #9085e9;
+    --series-6: #e66767;
+    --series-other: #383835;
+    --shadow: 0 10px 24px -14px rgba(0,0,0,0.6);
+  }
+
+  *{ box-sizing:border-box; }
+  body{ background: var(--page); }
+  .app{
+    max-width: 480px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 16px 104px;
+    font-family: "BIZ UDPGothic", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  h1,h2{ font-family:"Zen Maru Gothic", "BIZ UDPGothic", sans-serif; margin:0; text-wrap: balance; }
+
+  /* top bar */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .topbar-title{ display:flex; align-items:center; gap:8px; font-weight:900; font-size:1.2rem; min-width:0; }
+  .topbar-title svg{ width:30px; height:30px; flex:0 0 auto; }
+  .star-badge{
+    display:flex; align-items:center; gap:5px; background:var(--accent-soft); color:var(--accent);
+    border-radius:999px; padding:7px 13px; font-weight:700; font-size:.92rem; font-variant-numeric: tabular-nums;
+    flex:0 0 auto;
+  }
+  .star-badge svg{ width:16px; height:16px; }
+  .star-badge.is-popping{ animation: star-pop .5s ease; }
+  @keyframes star-pop{ 0%{ transform:scale(1); } 45%{ transform:scale(1.28); } 100%{ transform:scale(1); } }
+  @media (prefers-reduced-motion: reduce){ .star-badge.is-popping{ animation:none; } }
+
+  .toast{
+    position: fixed; left:50%; transform:translateX(-50%);
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    background: var(--ink); color: var(--bg); padding:10px 18px; border-radius:999px;
+    font-size:.85rem; font-weight:700; box-shadow: var(--shadow); z-index:30;
+    max-width: calc(100% - 32px); text-align:center;
+  }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    display:flex;
+    flex-direction:column;
+    gap: 16px;
+    min-width: 0;
+  }
+  .card h2{ font-size: 1.05rem; font-weight:700; color: var(--ink); }
+  /* today-weekday is a pill; its JS-set `color` doubles as the border via currentColor, so Sun/Sat read clearly */
+  .today-weekday{
+    align-self:flex-start; margin:0; font-size:.85rem; font-weight:700;
+    padding:4px 12px; border-radius:999px; border:1.5px solid currentColor;
+  }
+  .tab-panels{ display:flex; flex-direction:column; gap:16px; }
+
+  /* fixed day blocks: name+dot on the left, a small dial on the right */
+  .fixed-list{ display:flex; flex-direction:column; gap:16px; }
+  .fixed-row{ display:flex; align-items:center; gap:12px; }
+  .fixed-row-head{ display:flex; align-items:center; gap:8px; flex:1 1 auto; min-width:0; }
+  .fixed-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+  .fixed-name{ font-size:.88rem; font-weight:700; min-width:0; overflow-wrap:anywhere; }
+  .fixed-total{
+    display:flex; justify-content:space-between; font-size:.82rem; color:var(--ink-soft);
+    border-top:1px solid var(--border); padding-top:16px;
+  }
+  .fixed-total strong{ color:var(--ink); }
+  .hint{ margin:0; font-size:.78rem; color:var(--muted); text-align:center; }
+
+  /* chart */
+  .chart-wrap{ position:relative; width: 100%; max-width: 240px; margin: 0 auto; aspect-ratio: 1/1; }
+  .chart-wrap svg{ width:100%; height:100%; display:block; overflow:visible; }
+  .donut-center{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:2px; padding: 0 24px;
+  }
+  .donut-remaining-label{ font-size:.72rem; color:var(--muted); }
+  .donut-remaining-value{
+    font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.1rem; line-height:1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .donut-remaining-value.is-over{ color: var(--warning); }
+  .donut-remaining-value.is-live{ color: var(--accent); }
+
+  .legend{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .legend li{ display:flex; align-items:center; gap:8px; font-size:.88rem; border-radius:12px; padding:6px 8px; transition: background .15s ease; }
+  .legend li.is-active{ background: var(--accent-soft); }
+  .legend li.is-pending{ flex-direction:column; align-items:stretch; }
+  .legend-pending-head{ display:flex; align-items:center; gap:8px; }
+  .legend-pending-chips{ display:flex; flex-wrap:wrap; gap:6px; padding-left:20px; }
+  .legend-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+  .legend-name{ flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+  .legend-time{ color:var(--ink-soft); font-size:.8rem; white-space:nowrap; font-variant-numeric: tabular-nums; }
+  .legend-check{ width:18px; height:18px; flex:0 0 auto; color: var(--good); }
+  .legend-icon-btn{
+    border:none; background:transparent; color:var(--muted); font-size:1rem; width:28px; height:28px;
+    border-radius:50%; cursor:pointer; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+  }
+  .legend-icon-btn:hover{ background: var(--border); color: var(--ink); }
+  .legend-icon-btn.is-play{ color:var(--accent); }
+  .legend-icon-btn.is-stop{ color:var(--warning); font-size:.75rem; }
+
+  .link-btn{
+    align-self:flex-start; border:none; background:none; color:var(--accent); font-size:.82rem;
+    font-weight:700; cursor:pointer; padding:4px 0;
+  }
+  .table-wrap{ overflow-x:auto; }
+  table{ width:100%; border-collapse:collapse; font-size:.82rem; }
+  table th, table td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+  table td.num{ text-align:right; font-variant-numeric: tabular-nums; }
+
+  .warning-banner{
+    display:flex; align-items:flex-start; gap:10px; background:var(--warning-soft);
+    border-radius:14px; padding:10px 12px; font-size:.82rem; line-height:1.5;
+  }
+  .warning-banner svg{ flex:0 0 auto; margin-top:1px; }
+  .warning-banner strong{ color: var(--ink); }
+
+  /* forms */
+  .field{ display:flex; flex-direction:column; gap:8px; font-size:.85rem; font-weight:700; }
+  .field input[type="text"]{
+    font: inherit; font-weight:400; padding:12px 14px; border-radius:14px; border:1px solid var(--border);
+    background: var(--bg); color: var(--ink);
+  }
+  .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
+  .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
+  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible{
+    outline: 3px solid var(--accent); outline-offset: 2px;
+  }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{
+    border:1px solid var(--border); background:var(--bg); color:var(--ink);
+    font: inherit; font-weight:700; font-size:.82rem; padding:8px 14px; border-radius:999px; cursor:pointer;
+  }
+  .chip.chip-sm{ padding:5px 10px; font-size:.74rem; }
+  .chip[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .field-error{ color:#c0392b; font-size:.78rem; font-weight:400; min-height:1em; }
+  .btn{
+    font: inherit; font-weight:700; border:none; border-radius:16px; padding:13px 18px; cursor:pointer;
+    font-size:.95rem; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .btn-accent{ background:var(--accent); color:var(--accent-ink); }
+  .btn-accent:active{ transform: scale(.98); }
+
+  /* weekday chips: identity colour (red=Sun, blue=Sat) always on; selected state fills solid, set via JS so
+     the text stays readable instead of relying on a CSS override of an inline colour */
+  .weekday-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .weekday-chip{
+    width:40px; height:40px; border-radius:50%; border:1.5px solid var(--border); background:var(--bg);
+    font: inherit; font-weight:700; font-size:.85rem; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .weekday-chip[aria-pressed="true"]{ border-color:transparent; }
+
+  /* routine list */
+  .routine-list{ display:flex; flex-direction:column; gap:10px; }
+  .routine-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .routine-name{ flex:1 1 100%; font-size:.88rem; font-weight:700; min-width:0; overflow-wrap:anywhere; }
+  .routine-days{ display:flex; gap:4px; flex:1 1 auto; }
+  .routine-day-badge{
+    width:22px; height:22px; border-radius:50%; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center; font-size:.68rem; font-weight:700;
+  }
+  .routine-del{
+    border:none; background:transparent; color:var(--muted); font-size:1rem; width:28px; height:28px;
+    border-radius:50%; cursor:pointer; flex:0 0 auto;
+  }
+  .routine-del:hover{ background: var(--border); color: var(--ink); }
+
+  /* preset duration popup */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(10,16,13,0.5); z-index:40;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-card{
+    background: var(--surface); border-radius:24px; padding:20px; width:100%; max-width:360px;
+    display:flex; flex-direction:column; gap:16px; box-shadow: var(--shadow);
+  }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:700; font-size:1.05rem; }
+
+  /* duration / time dial: drag or tap around the ring; release commits the value */
+  .dial-wrap{ position:relative; width:150px; height:150px; margin:8px auto 0; flex:0 0 auto; }
+  .dial-wrap.dial-sm{ width:112px; height:112px; margin:0; }
+  .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
+  .dial-center{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; padding:0 30px;
+  }
+  .dial-sm .dial-center{ padding:0 22px; }
+  .dial-value{
+    font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
+    font-variant-numeric: tabular-nums; color: var(--ink); text-align:center;
+  }
+  .dial-sm .dial-value{ font-size:.86rem; }
+
+  /* suggestions */
+  .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
+  .suggest-grid, .preset-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
+  .preset-card{ cursor:pointer; width:100%; background: var(--surface); color: var(--ink); font: inherit; }
+  .preset-card:active{ transform: scale(.97); }
+  .suggest-card, .preset-card{
+    border:1px solid var(--border); border-radius:16px; padding:12px; display:flex; flex-direction:column;
+    align-items:center; gap:8px; text-align:center; min-width:0;
+  }
+  .suggest-card.is-selected{ background: var(--accent-soft); border-color: var(--accent); }
+  .suggest-icon{ width:34px; height:34px; }
+  .suggest-name{ font-size:.85rem; font-weight:700; line-height:1.3; }
+  .suggest-need{ font-size:.74rem; color:var(--ink-soft); }
+  .suggest-pick{
+    margin-top:4px; width:100%; border:1px solid var(--accent); background:transparent; color:var(--accent);
+    font: inherit; font-weight:700; font-size:.78rem; padding:7px 8px; border-radius:12px; cursor:pointer;
+  }
+  .suggest-pick[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); }
+
+  /* bottom tab bar */
+  .tabbar{
+    position: fixed; left:0; right:0; bottom:0; z-index:10;
+    display:flex; justify-content:center;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .tabbar-inner{ display:flex; width:100%; max-width:480px; gap:2px; }
+  .tab-btn{
+    flex:1 1 0; display:flex; flex-direction:column; align-items:center; gap:2px;
+    border:none; background:none; color:var(--muted); font: inherit; font-size:.68rem; font-weight:700;
+    padding:7px 2px; border-radius:14px; cursor:pointer; min-width:0;
+  }
+  .tab-btn svg{ width:22px; height:22px; }
+  .tab-btn[aria-selected="true"]{ color: var(--accent); background: var(--accent-soft); }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation-duration: .01ms !important; } }
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-title">
+      <svg viewBox="0 0 56 56" aria-hidden="true">
+        <circle cx="28" cy="28" r="24" fill="none" stroke="var(--accent)" stroke-width="4"/>
+        <line x1="28" y1="28" x2="28" y2="15" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
+        <line x1="28" y1="28" x2="37" y2="33" stroke="var(--series-0)" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="28" cy="28" r="3" fill="var(--accent)"/>
+      </svg>
+      <span>すきまタイム</span>
+    </div>
+    <div class="star-badge" id="starBadge">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
+      <span id="starCount">0</span>
+    </div>
+  </header>
+
+  <p class="toast" id="toast" hidden></p>
+
+  <main class="tab-panels">
+    <section class="tab-panel" data-panel="today" id="panel-today">
+      <section class="card">
+        <h2>きょうの 24じかん</h2>
+        <p class="today-weekday" id="todayWeekdayLabel"></p>
+        <div class="fixed-row">
+          <div class="fixed-row-head"><span class="fixed-name">おきる じかん</span></div>
+          <div class="dial-wrap dial-sm" id="wakeDial"></div>
+        </div>
+        <div class="fixed-list" id="fixedList"></div>
+        <div class="fixed-total">
+          <span>すいみん・がっこうなど ごうけい</span>
+          <strong id="fixedTotal">-</strong>
+        </div>
+        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね</p>
+      </section>
+
+      <section class="card">
+        <h2>1にちの じかんの つかいかた</h2>
+        <div class="chart-wrap">
+          <svg id="donut" viewBox="0 0 240 240" aria-hidden="true"></svg>
+          <div class="donut-center">
+            <div class="donut-remaining-label" id="remainingLabel">じゆうに つかえる</div>
+            <div class="donut-remaining-value" id="remainingValue">-</div>
+          </div>
+        </div>
+        <div id="warningSlot"></div>
+        <ul class="legend" id="legend"></ul>
+        <button class="link-btn" id="toggleTable" aria-expanded="false">ひょうで みる ▾</button>
+        <div class="table-wrap" id="tableWrap" hidden>
+          <table>
+            <thead><tr><th>よてい</th><th class="num">じかん</th></tr></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" data-panel="oneoff" id="panel-oneoff" hidden>
+      <section class="card">
+        <h2>よく つかう よてい</h2>
+        <p class="hint">タップして、じかんを えらぶだけで ついかできるよ</p>
+        <div class="preset-grid" id="presetGrid"></div>
+      </section>
+
+      <section class="card">
+        <h2>じぶんで にゅうりょくする</h2>
+        <form id="taskForm">
+          <label class="field">
+            <span>なにをする？</span>
+            <input type="text" id="taskName" placeholder="れい：ピアノの れんしゅう" maxlength="20">
+          </label>
+          <div class="field">
+            <span>どのくらい？</span>
+            <div class="dial-wrap" id="taskDial"></div>
+          </div>
+          <p class="field-error" id="formError" role="alert"></p>
+          <button type="submit" class="btn btn-accent">＋ きょうに ついかする</button>
+        </form>
+        <p class="hint">リストに ないときだけ、ここから にゅうりょくしてね</p>
+      </section>
+    </section>
+
+    <section class="tab-panel" data-panel="routine" id="panel-routine" hidden>
+      <section class="card">
+        <h2>いつもの よてい</h2>
+        <div class="routine-list" id="routineList"></div>
+        <form id="routineForm">
+          <label class="field">
+            <span>なにをする？</span>
+            <input type="text" id="routineName" placeholder="れい：ピアノ" maxlength="20">
+          </label>
+          <div class="field">
+            <span>どの曜日？</span>
+            <div class="weekday-row" id="routineWeekdays"></div>
+          </div>
+          <p class="field-error" id="routineError" role="alert"></p>
+          <button type="submit" class="btn btn-accent">＋ とうろくする</button>
+        </form>
+        <p class="hint">とうろくした曜日に、自動で「きょう」に出てくるよ。じかんは その日ごとに きめるよ</p>
+      </section>
+    </section>
+
+    <section class="tab-panel" data-panel="play" id="panel-play" hidden>
+      <section class="card">
+        <h2>のこり じかんで できること</h2>
+        <div class="empty-state" id="suggestEmpty" hidden></div>
+        <div class="suggest-grid" id="suggestGrid"></div>
+      </section>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="がめんの きりかえ">
+    <div class="tabbar-inner" role="tablist">
+      <button class="tab-btn" data-tab="today" role="tab" aria-selected="true" aria-controls="panel-today">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 12V3A9 9 0 0 1 19.5 16.5Z" fill="currentColor"/></svg>
+        きょう
+      </button>
+      <button class="tab-btn" data-tab="oneoff" role="tab" aria-selected="false" aria-controls="panel-oneoff">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        そのひ
+      </button>
+      <button class="tab-btn" data-tab="routine" role="tab" aria-selected="false" aria-controls="panel-routine">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7a8 8 0 0 1 14-4.5M20 2v5h-5"/><path d="M20 17a8 8 0 0 1-14 4.5M4 22v-5h5"/></svg>
+        いつも
+      </button>
+      <button class="tab-btn" data-tab="play" role="tab" aria-selected="false" aria-controls="panel-play">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
+        あそび
+      </button>
+    </div>
+  </nav>
+
+  <div class="modal-backdrop" id="presetModalBackdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="presetModalName">
+      <div class="modal-head">
+        <span id="presetModalName"></span>
+        <button type="button" class="legend-icon-btn" id="presetModalClose" aria-label="とじる">×</button>
+      </div>
+      <div class="field">
+        <span>どのくらい？</span>
+        <div class="dial-wrap" id="presetModalDial"></div>
+      </div>
+      <p class="field-error" id="presetModalError" role="alert"></p>
+      <button type="button" class="btn btn-accent" id="presetModalConfirm">＋ ついかする</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "sukima-time-v4";
+  var SERIES_COUNT = 7; // --series-0..6 before folding into "other"
+  var DAY_MINUTES = 1440;
+  var WEEKDAY_NAMES = ["日","月","火","水","木","金","土"]; // index matches Date#getDay()
+
+  var FIXED_BLOCKS = [
+    {key:"school", name:"がっこう",         min:0,   max:600, colorVar:"--fixed-school"},
+    {key:"other",  name:"ごはん・おふろ など", min:0,   max:240, colorVar:"--fixed-other"},
+    {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep"}
+  ];
+  var DEFAULT_WAKE_TIME = "06:30";
+
+  function pad2(n){ return n < 10 ? "0"+n : String(n); }
+
+  function parseTimeToMinutes(value){
+    if(typeof value === "string" && /^\d{2}:\d{2}$/.test(value)){
+      var parts = value.split(":");
+      var h = parseInt(parts[0],10), m = parseInt(parts[1],10);
+      if(h >= 0 && h <= 23 && m >= 0 && m <= 59) return h*60+m;
+    }
+    return null;
+  }
+  function minutesToTimeString(v){
+    v = Math.max(0, Math.min(1439, Math.round(v)));
+    return pad2(Math.floor(v/60)) + ":" + pad2(v%60);
+  }
+  function formatClockDisplay(v){
+    v = Math.max(0, Math.min(1439, Math.round(v)));
+    var h = Math.floor(v/60), m = v%60;
+    return h + ":" + pad2(m);
+  }
+
+  function weekdayColorVar(i){
+    if(i === 0) return "var(--weekday-sun)";
+    if(i === 6) return "var(--accent)";
+    return "var(--ink)";
+  }
+
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
+  }
+  function todayWeekday(){ return new Date().getDay(); }
+
+  var ACTIVITIES = [
+    {id:"jump",   name:"なわとび",            need:15, icon:"loop"},
+    {id:"read",   name:"ほんを よむ",          need:15, icon:"book"},
+    {id:"draw",   name:"えを かく",            need:20, icon:"squiggle"},
+    {id:"origami",name:"おりがみ",             need:20, icon:"square"},
+    {id:"blocks", name:"ブロックあそび",        need:30, icon:"grid"},
+    {id:"help",   name:"おかしづくりを てつだう", need:30, icon:"heart"},
+    {id:"outside",name:"そとで あそぶ",        need:45, icon:"ball"},
+    {id:"craft",  name:"おおきな こうさく",     need:60, icon:"star"}
+  ];
+
+  var PRESET_TASKS = [
+    {name:"しゅくだい",       icon:"pencil"},
+    {name:"ならいごと",       icon:"note"},
+    {name:"おてつだい",       icon:"heart"},
+    {name:"そとで あそぶ",    icon:"ball"},
+    {name:"ほんを よむ",      icon:"book"},
+    {name:"テレビ・どうが",   icon:"tv"},
+    {name:"ゲーム",          icon:"game"},
+    {name:"じゆうあそび",     icon:"squiggle"}
+  ];
+
+  var ICON_SHAPES = {
+    loop:'<path d="M10 24c0-6 5-11 11-11s11 5 11 11-5 11-11 11-11-5-11-11z" fill="none" stroke="currentColor" stroke-width="3"/>',
+    book:'<path d="M6 10h14v22H6z M28 10h14v22H28z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><line x1="20" y1="10" x2="20" y2="32" stroke="currentColor" stroke-width="3"/>',
+    squiggle:'<path d="M6 30c5 0 5-16 10-16s5 16 10 16 5-16 10-16 5 16 10 16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
+    square:'<rect x="10" y="10" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3"/><path d="M10 10l22 22" stroke="currentColor" stroke-width="3"/>',
+    grid:'<rect x="7" y="7" width="12" height="12" fill="currentColor"/><rect x="23" y="7" width="12" height="12" fill="currentColor" opacity=".55"/><rect x="7" y="23" width="12" height="12" fill="currentColor" opacity=".55"/><rect x="23" y="23" width="12" height="12" fill="currentColor"/>',
+    heart:'<path d="M21 34S6 24 6 14a7 7 0 0 1 13-3 7 7 0 0 1 13 3c0 10-15 20-15 20z" fill="currentColor"/>',
+    ball:'<circle cx="21" cy="21" r="14" fill="none" stroke="currentColor" stroke-width="3"/><path d="M8 21h26M21 8v26M12 12l18 18M30 12 12 30" stroke="currentColor" stroke-width="1.5" opacity=".5"/>',
+    star:'<path d="M21 6l5 10 11 1.5-8 7.7 2 11-10-5.5-10 5.5 2-11-8-7.7 11-1.5z" fill="currentColor"/>',
+    pencil:'<path d="M10 32l18-18 6 6-18 18z" fill="currentColor"/><path d="M28 14l4-4 4 4-4 4z" fill="currentColor" opacity=".55"/><path d="M8 34l4-7 3 3z" fill="currentColor"/>',
+    note:'<circle cx="13" cy="29" r="5.5" fill="currentColor"/><circle cx="29" cy="25" r="5.5" fill="currentColor"/><path d="M18.5 29V10l16-4v15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>',
+    tv:'<rect x="7" y="9" width="28" height="19" rx="3" fill="none" stroke="currentColor" stroke-width="3"/><line x1="15" y1="33" x2="27" y2="33" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>',
+    game:'<rect x="6" y="13" width="30" height="17" rx="8" fill="none" stroke="currentColor" stroke-width="3"/><line x1="14" y1="18" x2="14" y2="25" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><line x1="10.5" y1="21.5" x2="17.5" y2="21.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="29" cy="19" r="2" fill="currentColor"/><circle cx="29" cy="25" r="2" fill="currentColor"/>'
+  };
+  function icon(key, className, colorVarName){
+    var shape = ICON_SHAPES[key] || ICON_SHAPES.star;
+    return '<svg class="' + className + '" viewBox="0 0 42 42" aria-hidden="true" style="color:var(' + colorVarName + ')">' + shape + '</svg>';
+  }
+
+  // ---- state --------------------------------------------------------------
+
+  function loadState(){
+    var fallback = {
+      fixed: {sleep:540, school:480, other:90},
+      wakeTime: DEFAULT_WAKE_TIME,
+      routines: [
+        {id:"routine-seed-1", name:"しゅくだい", weekdays:[0,1,2,3,4,5,6]}
+      ],
+      day: null,
+      stars: 0,
+      timer: null
+    };
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      if(!parsed || !Array.isArray(parsed.routines) || !parsed.fixed) parsed = fallback;
+      FIXED_BLOCKS.forEach(function(b){
+        if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
+      });
+      if(parseTimeToMinutes(parsed.wakeTime) === null) parsed.wakeTime = DEFAULT_WAKE_TIME;
+      if(typeof parsed.stars !== "number") parsed.stars = 0;
+      if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
+      return parsed;
+    }catch(e){ return fallback; }
+  }
+
+  function saveState(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* ignore */ }
+  }
+
+  var state = loadState();
+  var activeLegendId = null;
+  var tickHandle = null;
+  var toastHandle = null;
+
+  function ensureToday(){
+    var ts = todayStr();
+    if(state.day && state.day.date === ts) return;
+    var wd = todayWeekday();
+    var tasks = state.routines.filter(function(r){ return r.weekdays.indexOf(wd) !== -1; }).map(function(r){
+      return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
+    });
+    state.day = {date: ts, tasks: tasks, doneActivityIds: []};
+    state.timer = null;
+    saveState();
+  }
+  ensureToday();
+
+  function formatMinutes(total){
+    total = Math.max(0, Math.round(total));
+    var h = Math.floor(total/60), m = total%60;
+    if(h === 0) return m + "ぷん";
+    if(m === 0) return h + "じかん";
+    return h + "じかん " + m + "ぷん";
+  }
+
+  function formatClock(totalSeconds){
+    totalSeconds = Math.max(0, Math.round(totalSeconds));
+    var m = Math.floor(totalSeconds/60), s = totalSeconds%60;
+    return m + ":" + (s < 10 ? "0"+s : s);
+  }
+
+  function showToast(message){
+    var toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.hidden = false;
+    if(toastHandle) clearTimeout(toastHandle);
+    toastHandle = setTimeout(function(){ toast.hidden = true; }, 2600);
+  }
+
+  function popStarBadge(){
+    var badge = document.getElementById("starBadge");
+    badge.classList.remove("is-popping");
+    requestAnimationFrame(function(){ badge.classList.add("is-popping"); });
+  }
+
+  function polar(cx, cy, r, angleDeg){
+    var a = (angleDeg - 90) * Math.PI/180;
+    return {x: cx + r*Math.cos(a), y: cy + r*Math.sin(a)};
+  }
+
+  function arcPath(cx, cy, rOuter, rInner, startDeg, endDeg){
+    if(endDeg <= startDeg) return "";
+    var p1 = polar(cx, cy, rOuter, endDeg);
+    var p2 = polar(cx, cy, rOuter, startDeg);
+    var p3 = polar(cx, cy, rInner, startDeg);
+    var p4 = polar(cx, cy, rInner, endDeg);
+    var large = (endDeg - startDeg) > 180 ? 1 : 0;
+    return [
+      "M", p1.x, p1.y,
+      "A", rOuter, rOuter, 0, large, 0, p2.x, p2.y,
+      "L", p3.x, p3.y,
+      "A", rInner, rInner, 0, large, 1, p4.x, p4.y,
+      "Z"
+    ].join(" ");
+  }
+
+  function colorVar(index, isOther){
+    if(isOther) return "var(--series-other)";
+    return "var(--series-" + (index % SERIES_COUNT) + ")";
+  }
+
+  // ---- dial: drag or tap around the ring to set a value within [min,max] ----
+  // Visual feedback is instant on every move; the value is only committed
+  // (onChange fires, which saves + re-renders the app) when the finger lifts,
+  // so a drag never rebuilds the rest of the page mid-gesture.
+
+  function buildDial(containerId, opts){
+    opts = opts || {};
+    var min = opts.min || 0;
+    var max = opts.max;
+    var step = opts.step || 5;
+    var format = opts.format || function(v){ return String(v); };
+    var tickFormat = opts.tickFormat || function(v){ return String(Math.round(v)); };
+    var tickValues = opts.ticks || [min, min+(max-min)*0.25, min+(max-min)*0.5, min+(max-min)*0.75];
+
+    var svgNS = "http://www.w3.org/2000/svg";
+    var root = document.getElementById(containerId);
+    root.innerHTML =
+      '<svg viewBox="0 0 160 160" class="dial-svg" aria-hidden="true">' +
+        '<circle cx="80" cy="80" r="58" fill="none" stroke="var(--border)" stroke-width="12"/>' +
+        '<path class="dial-fill" fill="var(--accent)"/>' +
+        '<g class="dial-ticks"></g>' +
+        '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
+      '</svg>' +
+      '<div class="dial-center"><div class="dial-value">0</div></div>';
+    var svg = root.querySelector(".dial-svg");
+    var fillPath = root.querySelector(".dial-fill");
+    var handle = root.querySelector(".dial-handle");
+    var valueEl = root.querySelector(".dial-value");
+    var ticksG = root.querySelector(".dial-ticks");
+    var cx = 80, cy = 80, rTrack = 58;
+
+    tickValues.forEach(function(tv){
+      var v = (tv && typeof tv === "object") ? tv.value : tv;
+      var label = (tv && typeof tv === "object") ? tv.label : tickFormat(v);
+      var ang = ((v-min)/(max-min))*360;
+      var p = polar(cx, cy, rTrack+16, ang);
+      var t = document.createElementNS(svgNS, "text");
+      t.setAttribute("x", p.x); t.setAttribute("y", p.y+3);
+      t.setAttribute("text-anchor","middle"); t.setAttribute("font-size","9"); t.setAttribute("fill","var(--muted)");
+      t.textContent = label;
+      ticksG.appendChild(t);
+    });
+
+    var value = min;
+    var onChangeCb = null;
+
+    function renderVisual(){
+      var ang = ((value-min)/(max-min))*360;
+      var p = polar(cx, cy, rTrack, ang);
+      handle.setAttribute("cx", p.x); handle.setAttribute("cy", p.y);
+      fillPath.setAttribute("d", value <= min ? "" : arcPath(cx,cy,rTrack+6,rTrack-6,0,ang));
+      valueEl.textContent = format(value);
+    }
+
+    function valueFromClientPoint(clientX, clientY){
+      var rect = svg.getBoundingClientRect();
+      var scale = 160/rect.width;
+      var x = (clientX - rect.left)*scale - cx;
+      var y = (clientY - rect.top)*scale - cy;
+      var deg = Math.atan2(y, x)*180/Math.PI + 90;
+      if(deg < 0) deg += 360;
+      var raw = min + (deg/360)*(max-min);
+      var snapped = Math.round((raw-min)/step)*step + min;
+      return Math.max(min, Math.min(max, snapped));
+    }
+
+    var dragging = false;
+    function pointerDown(ev){
+      dragging = true;
+      value = valueFromClientPoint(ev.clientX, ev.clientY);
+      renderVisual();
+      try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
+    }
+    function pointerMove(ev){
+      if(!dragging) return;
+      value = valueFromClientPoint(ev.clientX, ev.clientY);
+      renderVisual();
+    }
+    function pointerUp(){
+      if(!dragging) return;
+      dragging = false;
+      if(onChangeCb) onChangeCb(value);
+    }
+    svg.addEventListener("pointerdown", pointerDown);
+    svg.addEventListener("pointermove", pointerMove);
+    svg.addEventListener("pointerup", pointerUp);
+    svg.addEventListener("pointercancel", pointerUp);
+
+    renderVisual();
+    return {
+      get: function(){ return value; },
+      set: function(v){ value = Math.max(min, Math.min(max, v)); renderVisual(); },
+      onChange: function(cb){ onChangeCb = cb; }
+    };
+  }
+
+  // ---- timer -----------------------------------------------------------
+
+  function ensureTicking(){
+    if(tickHandle) return;
+    tickHandle = setInterval(tick, 1000);
+  }
+  function stopTicking(){
+    if(tickHandle){ clearInterval(tickHandle); tickHandle = null; }
+  }
+
+  function startTimer(taskId){
+    state.timer = {taskId: taskId, startedAt: Date.now()};
+    saveState();
+    ensureTicking();
+    render();
+  }
+
+  function cancelTimer(){
+    state.timer = null;
+    saveState();
+    stopTicking();
+    render();
+  }
+
+  function completeRunningTimer(){
+    var t = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
+    state.timer = null;
+    if(t){
+      t.completed = true;
+      state.stars += 1;
+      showToast(t.name + " できたね！ ⭐");
+      popStarBadge();
+    }
+    saveState();
+    stopTicking();
+    render();
+  }
+
+  function tick(){
+    if(!state.timer){ stopTicking(); return; }
+    var t = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
+    if(!t || !t.minutes){ state.timer = null; saveState(); stopTicking(); render(); return; }
+    var plannedSec = t.minutes * 60;
+    var elapsedSec = Math.floor((Date.now() - state.timer.startedAt) / 1000);
+    var remainingSec = plannedSec - elapsedSec;
+    if(remainingSec <= 0){ completeRunningTimer(); return; }
+    updateRunningDisplays(t, remainingSec, plannedSec);
+  }
+
+  function updateRunningDisplays(t, remainingSec, plannedSec){
+    var labelEl = document.getElementById("remainingLabel");
+    var valueEl = document.getElementById("remainingValue");
+    labelEl.textContent = t.name;
+    valueEl.textContent = formatClock(remainingSec);
+    valueEl.classList.add("is-live");
+    valueEl.classList.remove("is-over");
+    var countdownEl = document.getElementById("legendCountdown");
+    if(countdownEl) countdownEl.textContent = formatClock(remainingSec);
+    var overlay = document.getElementById("timerOverlayPath");
+    if(overlay){
+      var start = parseFloat(overlay.dataset.start), end = parseFloat(overlay.dataset.end);
+      var frac = Math.max(0, remainingSec/plannedSec);
+      var overlayEnd = start + (end-start)*frac;
+      overlay.setAttribute("d", arcPath(120,120,100,66,start,overlayEnd));
+    }
+  }
+
+  // ---- render ------------------------------------------------------------
+
+  function render(){
+    ensureToday();
+    var tasks = state.day.tasks;
+    var fixedSum = FIXED_BLOCKS.reduce(function(a,b){ return a + state.fixed[b.key]; }, 0);
+    var tasksSum = tasks.reduce(function(a,t){ return a + (t.minutes||0); }, 0);
+    var usedSum = fixedSum + tasksSum;
+    var overflow = Math.max(0, usedSum - DAY_MINUTES);
+    var remaining = Math.max(0, DAY_MINUTES - usedSum);
+    var isOver = overflow > 0;
+    var runningTask = state.timer ? tasks.find(function(t){ return t.id === state.timer.taskId; }) : null;
+
+    document.getElementById("starCount").textContent = state.stars;
+
+    var wd = todayWeekday();
+    var wdLabelEl = document.getElementById("todayWeekdayLabel");
+    wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
+    wdLabelEl.style.color = weekdayColorVar(wd);
+
+    wakeDial.set(parseTimeToMinutes(state.wakeTime) || parseTimeToMinutes(DEFAULT_WAKE_TIME));
+    FIXED_BLOCKS.forEach(function(b){ fixedDials[b.key].set(state.fixed[b.key]); });
+    document.getElementById("fixedTotal").textContent = formatMinutes(fixedSum);
+
+    var remainingLabelEl = document.getElementById("remainingLabel");
+    var remainingValueEl = document.getElementById("remainingValue");
+    remainingValueEl.classList.remove("is-live");
+    if(runningTask){
+      var plannedSec = runningTask.minutes*60;
+      var elapsedSec = Math.floor((Date.now()-state.timer.startedAt)/1000);
+      var remSec = Math.max(0, plannedSec-elapsedSec);
+      remainingLabelEl.textContent = runningTask.name;
+      remainingValueEl.textContent = formatClock(remSec);
+      remainingValueEl.classList.add("is-live");
+      remainingValueEl.classList.remove("is-over");
+    } else {
+      remainingLabelEl.textContent = "じゆうに つかえる";
+      remainingValueEl.textContent = isOver ? "0ぷん" : formatMinutes(remaining);
+      remainingValueEl.classList.toggle("is-over", isOver);
+    }
+
+    // donut: ordered chronologically from wake-up time, sleep last (ends exactly at wake time).
+    // tasks whose minutes are not yet estimated (null) are left out of the chart until set.
+    var donutTotal = isOver ? usedSum : DAY_MINUTES;
+    var sleepBlock = FIXED_BLOCKS.filter(function(b){ return b.key === "sleep"; });
+    var wakingFixed = FIXED_BLOCKS.filter(function(b){ return b.key !== "sleep"; });
+    var coloredTasks = tasks.map(function(t, i){
+      return {task:t, color: colorVar(i, i >= SERIES_COUNT)};
+    });
+    var slices = wakingFixed.map(function(b){
+      return {key:"fixed-"+b.key, minutes: state.fixed[b.key], color: "var(" + b.colorVar + ")"};
+    }).concat(coloredTasks.filter(function(ct){ return ct.task.minutes != null; }).map(function(ct){
+      return {key:ct.task.id, minutes:ct.task.minutes, color: ct.color, task:ct.task};
+    }));
+    if(!isOver && remaining > 0){
+      slices.push({key:"__remaining", minutes: remaining, color:"var(--remaining)"});
+    }
+    slices = slices.concat(sleepBlock.map(function(b){
+      return {key:"fixed-"+b.key, minutes: state.fixed[b.key], color: "var(" + b.colorVar + ")"};
+    }));
+
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.getElementById("donut");
+    svg.innerHTML = "";
+    var wakeMinutes = parseTimeToMinutes(state.wakeTime) || parseTimeToMinutes(DEFAULT_WAKE_TIME);
+    if(donutTotal <= 0){
+      svg.innerHTML = '<circle cx="120" cy="120" r="100" fill="none" />';
+    } else {
+      var gapDeg = slices.length > 1 ? 2 : 0;
+      var angle = isOver ? 0 : (wakeMinutes/DAY_MINUTES)*360;
+      var doneBadges = [];
+      slices.forEach(function(s){
+        var sweep = (s.minutes/donutTotal) * 360;
+        var start = angle, end = angle + sweep;
+        angle = end;
+        var gap = (sweep > gapDeg*2) ? gapDeg/2 : 0;
+        var gStart = start+gap, gEnd = end-gap;
+        var isRunning = s.task && runningTask && s.task.id === runningTask.id;
+
+        if(isRunning){
+          var base = document.createElementNS(svgNS,"path");
+          base.setAttribute("d", arcPath(120,120,100,66,gStart,gEnd));
+          base.setAttribute("fill", s.color);
+          base.style.opacity = "0.22";
+          svg.appendChild(base);
+
+          var overlay = document.createElementNS(svgNS,"path");
+          overlay.id = "timerOverlayPath";
+          overlay.dataset.start = gStart;
+          overlay.dataset.end = gEnd;
+          var plannedSec2 = s.task.minutes*60;
+          var elapsedSec2 = Math.floor((Date.now()-state.timer.startedAt)/1000);
+          var frac = Math.max(0, (plannedSec2-elapsedSec2)/plannedSec2);
+          overlay.setAttribute("d", arcPath(120,120,100,66,gStart, gStart+(gEnd-gStart)*frac));
+          overlay.setAttribute("fill", s.color);
+          svg.appendChild(overlay);
+        } else {
+          var path = document.createElementNS(svgNS,"path");
+          path.setAttribute("d", arcPath(120,120,100,66,gStart,gEnd));
+          path.setAttribute("fill", s.color);
+          path.dataset.key = s.key;
+          path.style.opacity = (activeLegendId && activeLegendId !== s.key) ? "0.35" : "1";
+          path.style.cursor = "pointer";
+          path.addEventListener("click", function(){ setActive(s.key); });
+          svg.appendChild(path);
+          if(s.task && s.task.completed){
+            doneBadges.push(polar(120,120,83,(gStart+gEnd)/2));
+          }
+        }
+      });
+      doneBadges.forEach(function(p){
+        var g = document.createElementNS(svgNS,"g");
+        g.innerHTML =
+          '<circle cx="'+p.x+'" cy="'+p.y+'" r="10" fill="var(--surface)"/>' +
+          '<path d="M'+(p.x-5)+' '+p.y+' l3.5 4 l6.5 -8" fill="none" stroke="var(--good)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+        svg.appendChild(g);
+      });
+
+      // hour ticks (clock face reference, plain numbers)
+      [0,6,12,18].forEach(function(h){
+        var ang = (h/24)*360;
+        var p1 = polar(120,120,100,ang), p2 = polar(120,120,106,ang);
+        var tickLine = document.createElementNS(svgNS,"line");
+        tickLine.setAttribute("x1",p1.x); tickLine.setAttribute("y1",p1.y);
+        tickLine.setAttribute("x2",p2.x); tickLine.setAttribute("y2",p2.y);
+        tickLine.setAttribute("stroke","var(--muted)"); tickLine.setAttribute("stroke-width","1.5");
+        svg.appendChild(tickLine);
+        var lp = polar(120,120,113,ang);
+        var label = document.createElementNS(svgNS,"text");
+        label.setAttribute("x",lp.x); label.setAttribute("y",lp.y+3);
+        label.setAttribute("text-anchor","middle"); label.setAttribute("font-size","9");
+        label.setAttribute("fill","var(--muted)");
+        label.textContent = h;
+        svg.appendChild(label);
+      });
+
+      // "now" marker: where we are in the 24h circle right now
+      var now = new Date();
+      var nowMinutes = now.getHours()*60 + now.getMinutes();
+      var nowAngle = (nowMinutes/DAY_MINUTES)*360;
+      var n1 = polar(120,120,48,nowAngle), n2 = polar(120,120,109,nowAngle);
+      var nowLine = document.createElementNS(svgNS,"line");
+      nowLine.id = "nowMarkerLine";
+      nowLine.setAttribute("x1",n1.x); nowLine.setAttribute("y1",n1.y);
+      nowLine.setAttribute("x2",n2.x); nowLine.setAttribute("y2",n2.y);
+      nowLine.setAttribute("stroke","var(--ink)"); nowLine.setAttribute("stroke-width","2"); nowLine.setAttribute("stroke-linecap","round");
+      svg.appendChild(nowLine);
+      var nowDot = document.createElementNS(svgNS,"circle");
+      nowDot.id = "nowMarkerDot";
+      nowDot.setAttribute("cx",n2.x); nowDot.setAttribute("cy",n2.y); nowDot.setAttribute("r","4");
+      nowDot.setAttribute("fill","var(--ink)");
+      svg.appendChild(nowDot);
+    }
+    if(runningTask){ ensureTicking(); } else { stopTicking(); }
+
+    // warning banner
+    var warnSlot = document.getElementById("warningSlot");
+    warnSlot.innerHTML = "";
+    if(isOver){
+      warnSlot.innerHTML =
+        '<div class="warning-banner">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
+        '<span><strong>よていが ' + formatMinutes(overflow) + ' おおいよ。</strong> なにか へらしてみよう。</span>' +
+        '</div>';
+    }
+
+    // legend
+    var legend = document.getElementById("legend");
+    legend.innerHTML = "";
+    function appendFixedLegendRow(b){
+      var key = "fixed-" + b.key;
+      var li = document.createElement("li");
+      li.classList.toggle("is-active", activeLegendId === key);
+      var dot = document.createElement("span");
+      dot.className = "legend-dot";
+      dot.style.background = "var(" + b.colorVar + ")";
+      var name = document.createElement("span");
+      name.className = "legend-name";
+      name.textContent = b.name;
+      var time = document.createElement("span");
+      time.className = "legend-time";
+      time.textContent = formatMinutes(state.fixed[b.key]);
+      li.appendChild(dot); li.appendChild(name); li.appendChild(time);
+      li.addEventListener("click", function(){ setActive(key); });
+      legend.appendChild(li);
+    }
+    wakingFixed.forEach(appendFixedLegendRow);
+    tasks.forEach(function(t, i){
+      var li = document.createElement("li");
+      var dot = document.createElement("span");
+      dot.className = "legend-dot";
+      dot.style.background = colorVar(i, i >= SERIES_COUNT);
+      var name = document.createElement("span");
+      name.className = "legend-name";
+      name.textContent = t.name;
+
+      if(t.minutes == null){
+        li.className = "is-pending";
+        var head = document.createElement("div");
+        head.className = "legend-pending-head";
+        head.appendChild(dot); head.appendChild(name);
+        var hint = document.createElement("span");
+        hint.className = "legend-time";
+        hint.textContent = "なんぷん？";
+        head.appendChild(hint);
+        li.appendChild(head);
+        var chipsWrap = document.createElement("div");
+        chipsWrap.className = "legend-pending-chips";
+        [15,30,45,60,90,120].forEach(function(m){
+          var chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip chip-sm";
+          chip.textContent = formatMinutes(m);
+          chip.addEventListener("click", function(){
+            t.minutes = m;
+            saveState(); render();
+          });
+          chipsWrap.appendChild(chip);
+        });
+        li.appendChild(chipsWrap);
+        legend.appendChild(li);
+        return;
+      }
+
+      li.classList.toggle("is-active", activeLegendId === t.id);
+      var isRunning = runningTask && runningTask.id === t.id;
+      li.appendChild(dot); li.appendChild(name);
+
+      if(t.completed){
+        var time1 = document.createElement("span");
+        time1.className = "legend-time";
+        time1.textContent = formatMinutes(t.minutes);
+        var check = document.createElement("svg");
+        check.className = "legend-check";
+        check.setAttribute("viewBox","0 0 24 24");
+        check.innerHTML = '<circle cx="12" cy="12" r="11" fill="none" stroke="var(--good)" stroke-width="2"/><path d="M7 12.5l3.2 3.5L17 9" fill="none" stroke="var(--good)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+        li.appendChild(time1); li.appendChild(check);
+      } else if(isRunning){
+        var time2 = document.createElement("span");
+        time2.className = "legend-time";
+        time2.id = "legendCountdown";
+        var plannedSec3 = t.minutes*60;
+        var elapsedSec3 = Math.floor((Date.now()-state.timer.startedAt)/1000);
+        time2.textContent = formatClock(Math.max(0, plannedSec3-elapsedSec3));
+        var stop = document.createElement("button");
+        stop.className = "legend-icon-btn is-stop";
+        stop.setAttribute("aria-label", t.name + " の たいまーを やめる");
+        stop.textContent = "■";
+        stop.addEventListener("click", function(){ cancelTimer(); });
+        li.appendChild(time2); li.appendChild(stop);
+      } else {
+        var time3 = document.createElement("span");
+        time3.className = "legend-time";
+        time3.textContent = formatMinutes(t.minutes);
+        var play = document.createElement("button");
+        play.className = "legend-icon-btn is-play";
+        play.setAttribute("aria-label", t.name + " を はじめる");
+        play.textContent = "▶";
+        play.addEventListener("click", function(){ startTimer(t.id); });
+        var del = document.createElement("button");
+        del.className = "legend-icon-btn";
+        del.setAttribute("aria-label", t.name + " を けす");
+        del.textContent = "×";
+        del.addEventListener("click", function(){
+          state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== t.id; });
+          saveState(); render();
+        });
+        li.appendChild(time3); li.appendChild(play); li.appendChild(del);
+      }
+
+      li.addEventListener("click", function(ev){
+        if(ev.target.closest("button")) return;
+        setActive(t.id);
+      });
+      legend.appendChild(li);
+    });
+    if(remaining > 0 && !isOver){
+      var li2 = document.createElement("li");
+      li2.classList.toggle("is-active", activeLegendId === "__remaining");
+      var dot2 = document.createElement("span");
+      dot2.className = "legend-dot";
+      dot2.style.background = "var(--remaining)";
+      var name2 = document.createElement("span");
+      name2.className = "legend-name";
+      name2.textContent = "あいてる じかん";
+      var time4 = document.createElement("span");
+      time4.className = "legend-time";
+      time4.textContent = formatMinutes(remaining);
+      li2.appendChild(dot2); li2.appendChild(name2); li2.appendChild(time4);
+      li2.addEventListener("click", function(){ setActive("__remaining"); });
+      legend.appendChild(li2);
+    }
+    sleepBlock.forEach(appendFixedLegendRow);
+
+    // table
+    var tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    function appendFixedTableRow(b){
+      var tr = document.createElement("tr");
+      var td1 = document.createElement("td"); td1.textContent = b.name;
+      var td2 = document.createElement("td"); td2.className="num"; td2.textContent = formatMinutes(state.fixed[b.key]);
+      tr.appendChild(td1); tr.appendChild(td2);
+      tbody.appendChild(tr);
+    }
+    wakingFixed.forEach(appendFixedTableRow);
+    tasks.forEach(function(t){
+      var tr = document.createElement("tr");
+      var td1 = document.createElement("td");
+      td1.textContent = t.name + (t.minutes == null ? "（じかん みつもり中）" : t.completed ? "（できた！）" : (runningTask && runningTask.id===t.id ? "（いまやってる）" : ""));
+      var td2 = document.createElement("td"); td2.className="num"; td2.textContent = t.minutes == null ? "-" : formatMinutes(t.minutes);
+      tr.appendChild(td1); tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+    var trR = document.createElement("tr");
+    var tdR1 = document.createElement("td"); tdR1.textContent = isOver ? "たりない じかん" : "あいてる じかん";
+    var tdR2 = document.createElement("td"); tdR2.className="num"; tdR2.textContent = formatMinutes(isOver ? overflow : remaining);
+    trR.appendChild(tdR1); trR.appendChild(tdR2);
+    tbody.appendChild(trR);
+    sleepBlock.forEach(appendFixedTableRow);
+
+    // routine registration list (いつも タブ)
+    var routineListEl = document.getElementById("routineList");
+    routineListEl.innerHTML = "";
+    state.routines.forEach(function(r){
+      var row = document.createElement("div");
+      row.className = "routine-row";
+      var name = document.createElement("span");
+      name.className = "routine-name";
+      name.textContent = r.name;
+      var days = document.createElement("div");
+      days.className = "routine-days";
+      WEEKDAY_NAMES.forEach(function(wname, wi){
+        var badge = document.createElement("span");
+        badge.className = "routine-day-badge";
+        var active = r.weekdays.indexOf(wi) !== -1;
+        badge.textContent = wname;
+        if(active){
+          badge.style.color = "var(--accent-ink)";
+          badge.style.background = weekdayColorVar(wi);
+        } else {
+          badge.style.color = "var(--muted)";
+          badge.style.background = "var(--bg)";
+        }
+        days.appendChild(badge);
+      });
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "routine-del";
+      del.setAttribute("aria-label", r.name + " を やめる");
+      del.textContent = "×";
+      del.addEventListener("click", function(){
+        state.routines = state.routines.filter(function(x){ return x.id !== r.id; });
+        state.day.tasks = state.day.tasks.filter(function(x){ return x.routineId !== r.id; });
+        if(state.timer){
+          var running = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
+          if(!running) state.timer = null;
+        }
+        saveState(); render();
+      });
+      row.appendChild(name); row.appendChild(days); row.appendChild(del);
+      routineListEl.appendChild(row);
+    });
+
+    // suggestions
+    var grid = document.getElementById("suggestGrid");
+    var emptyState = document.getElementById("suggestEmpty");
+    grid.innerHTML = "";
+    var fitting = ACTIVITIES.filter(function(a){ return a.need <= remaining && !isOver; })
+      .sort(function(a,b){ return b.need - a.need; });
+
+    if(fitting.length === 0){
+      grid.hidden = true;
+      emptyState.hidden = false;
+      emptyState.innerHTML =
+        icon("loop", "suggest-icon", "--muted") +
+        '<p>' + (isOver
+          ? "よていを へらすと、できる あそびが でてくるよ。"
+          : remaining === 0
+            ? "きょうの じかんは ぴったり いっぱいだね！"
+            : "もう すこし じかんが あると、あそびが でてくるよ。") + '</p>';
+    } else {
+      grid.hidden = false;
+      emptyState.hidden = true;
+      fitting.forEach(function(a){
+        var card = document.createElement("div");
+        card.className = "suggest-card";
+        var done = state.day.doneActivityIds.indexOf(a.id) !== -1;
+        card.classList.toggle("is-selected", done);
+        card.innerHTML =
+          icon(a.icon, "suggest-icon", "--accent") +
+          '<div class="suggest-name"></div>' +
+          '<div class="suggest-need">' + formatMinutes(a.need) + ' あれば できる</div>' +
+          '<button type="button" class="suggest-pick" aria-pressed="' + done + '">' + (done ? "やったね！ ⭐" : "やったよ！") + '</button>';
+        card.querySelector(".suggest-name").textContent = a.name;
+        card.querySelector(".suggest-pick").addEventListener("click", function(){
+          var idx = state.day.doneActivityIds.indexOf(a.id);
+          if(idx === -1){
+            state.day.doneActivityIds.push(a.id);
+            state.stars += 1;
+            popStarBadge();
+            showToast(a.name + " やったね！ ⭐");
+          } else {
+            state.day.doneActivityIds.splice(idx,1);
+            state.stars = Math.max(0, state.stars - 1);
+          }
+          saveState(); render();
+        });
+        grid.appendChild(card);
+      });
+    }
+  }
+
+  function setActive(key){
+    activeLegendId = (activeLegendId === key) ? null : key;
+    render();
+  }
+
+  // ---- tabs --------------------------------------------------------------
+
+  var tabButtons = Array.prototype.slice.call(document.querySelectorAll(".tab-btn"));
+  var panels = {
+    today: document.getElementById("panel-today"),
+    oneoff: document.getElementById("panel-oneoff"),
+    routine: document.getElementById("panel-routine"),
+    play: document.getElementById("panel-play")
+  };
+  function switchTab(name){
+    tabButtons.forEach(function(btn){
+      var active = btn.dataset.tab === name;
+      btn.setAttribute("aria-selected", String(active));
+    });
+    Object.keys(panels).forEach(function(key){
+      panels[key].hidden = (key !== name);
+    });
+  }
+  tabButtons.forEach(function(btn){
+    btn.addEventListener("click", function(){ switchTab(btn.dataset.tab); });
+  });
+
+  // ---- wake time + fixed-block dials (きょう タブ) --------------------------
+
+  var wakeDial = buildDial("wakeDial", {
+    min:0, max:1440, step:5, format:formatClockDisplay,
+    ticks:[{value:0,label:"0"},{value:360,label:"6"},{value:720,label:"12"},{value:1080,label:"18"}]
+  });
+  wakeDial.onChange(function(v){
+    state.wakeTime = minutesToTimeString(v);
+    saveState(); render();
+  });
+
+  var fixedDials = {};
+  var fixedListEl = document.getElementById("fixedList");
+  FIXED_BLOCKS.forEach(function(b){
+    var row = document.createElement("div");
+    row.className = "fixed-row";
+    var head = document.createElement("div");
+    head.className = "fixed-row-head";
+    var dot = document.createElement("span");
+    dot.className = "fixed-dot";
+    dot.style.background = "var(" + b.colorVar + ")";
+    var name = document.createElement("span");
+    name.className = "fixed-name";
+    name.textContent = b.name;
+    head.appendChild(dot); head.appendChild(name);
+    var dialWrap = document.createElement("div");
+    dialWrap.className = "dial-wrap dial-sm";
+    dialWrap.id = "fixedDial-" + b.key;
+    row.appendChild(head); row.appendChild(dialWrap);
+    fixedListEl.appendChild(row);
+
+    var dial = buildDial(dialWrap.id, {
+      min:b.min, max:b.max, step:15, format:formatMinutes,
+      tickFormat: function(v){ return String(Math.round(v/60)); }
+    });
+    dial.set(state.fixed[b.key]);
+    dial.onChange(function(v){
+      state.fixed[b.key] = v;
+      saveState(); render();
+    });
+    fixedDials[b.key] = dial;
+  });
+
+  // ---- today's one-off task form ("そのひ" タブ) -----------------------------
+
+  var taskDial = buildDial("taskDial", {max:120, format:formatMinutes});
+  taskDial.onChange(function(){ /* value already committed on release */ });
+
+  document.getElementById("toggleTable").addEventListener("click", function(){
+    var wrap = document.getElementById("tableWrap");
+    var btn = this;
+    var show = wrap.hidden;
+    wrap.hidden = !show;
+    btn.setAttribute("aria-expanded", String(show));
+    btn.textContent = show ? "ひょうを とじる ▴" : "ひょうで みる ▾";
+  });
+
+  function newId(prefix){ return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2,6); }
+
+  function addVariableTask(name, minutes){
+    state.day.tasks.push({ id: newId("t"), name: name, minutes: minutes, completed:false, origin:"variable" });
+    saveState();
+    showToast(name + " を ついかしたよ！");
+    switchTab("today");
+    render();
+  }
+
+  document.getElementById("taskForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var nameInput = document.getElementById("taskName");
+    var name = nameInput.value.trim();
+    var errorEl = document.getElementById("formError");
+    if(!name){ errorEl.textContent = "なにを するか かいてね"; return; }
+    if(!taskDial.get()){ errorEl.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
+    errorEl.textContent = "";
+    var minutes = taskDial.get();
+    nameInput.value = "";
+    taskDial.set(0);
+    addVariableTask(name, minutes);
+  });
+
+  var presetGrid = document.getElementById("presetGrid");
+  var presetModalBackdrop = document.getElementById("presetModalBackdrop");
+  var presetModalName = document.getElementById("presetModalName");
+  var presetModalError = document.getElementById("presetModalError");
+  var presetModalConfirmBtn = document.getElementById("presetModalConfirm");
+  var presetModalDial = buildDial("presetModalDial", {max:120, format:formatMinutes});
+  var modalPendingName = null;
+  var modalOpenerEl = null;
+
+  function openPresetModal(name, opener){
+    modalPendingName = name;
+    presetModalDial.set(0);
+    presetModalError.textContent = "";
+    presetModalName.textContent = name;
+    presetModalBackdrop.hidden = false;
+    modalOpenerEl = opener || null;
+    presetModalConfirmBtn.focus();
+  }
+
+  function closePresetModal(){
+    presetModalBackdrop.hidden = true;
+    modalPendingName = null;
+    presetModalDial.set(0);
+    presetModalError.textContent = "";
+    if(modalOpenerEl){ modalOpenerEl.focus(); modalOpenerEl = null; }
+  }
+
+  document.getElementById("presetModalClose").addEventListener("click", closePresetModal);
+  presetModalBackdrop.addEventListener("click", function(ev){
+    if(ev.target === presetModalBackdrop) closePresetModal();
+  });
+  document.addEventListener("keydown", function(ev){
+    if(ev.key === "Escape" && !presetModalBackdrop.hidden) closePresetModal();
+  });
+  presetModalConfirmBtn.addEventListener("click", function(){
+    if(!presetModalDial.get()){ presetModalError.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
+    var name = modalPendingName, minutes = presetModalDial.get();
+    closePresetModal();
+    addVariableTask(name, minutes);
+  });
+
+  PRESET_TASKS.forEach(function(preset){
+    var card = document.createElement("button");
+    card.type = "button";
+    card.className = "preset-card";
+    card.innerHTML =
+      icon(preset.icon, "suggest-icon", "--accent") +
+      '<div class="suggest-name"></div>';
+    card.querySelector(".suggest-name").textContent = preset.name;
+    card.addEventListener("click", function(){ openPresetModal(preset.name, card); });
+    presetGrid.appendChild(card);
+  });
+
+  // ---- routine registration ("いつも" タブ) ----------------------------------
+
+  var routineWeekdaysEl = document.getElementById("routineWeekdays");
+  var routineWeekdaySelected = [false,false,false,false,false,false,false];
+  function paintWeekdayChip(btn, wi, pressed){
+    btn.setAttribute("aria-pressed", String(pressed));
+    if(pressed){
+      btn.style.background = weekdayColorVar(wi);
+      btn.style.color = "var(--accent-ink)";
+    } else {
+      btn.style.background = "var(--bg)";
+      btn.style.color = weekdayColorVar(wi);
+    }
+  }
+  WEEKDAY_NAMES.forEach(function(wname, wi){
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "weekday-chip";
+    btn.textContent = wname;
+    paintWeekdayChip(btn, wi, false);
+    btn.addEventListener("click", function(){
+      routineWeekdaySelected[wi] = !routineWeekdaySelected[wi];
+      paintWeekdayChip(btn, wi, routineWeekdaySelected[wi]);
+      document.getElementById("routineError").textContent = "";
+    });
+    routineWeekdaysEl.appendChild(btn);
+  });
+
+  document.getElementById("routineForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var nameInput = document.getElementById("routineName");
+    var name = nameInput.value.trim();
+    var errorEl = document.getElementById("routineError");
+    var days = [];
+    routineWeekdaySelected.forEach(function(v,i){ if(v) days.push(i); });
+    if(!name){ errorEl.textContent = "なにを するか かいてね"; return; }
+    if(days.length === 0){ errorEl.textContent = "よう日を 1つ いじょう えらんでね"; return; }
+    errorEl.textContent = "";
+    var routine = {id: newId("routine"), name: name, weekdays: days};
+    state.routines.push(routine);
+    if(days.indexOf(todayWeekday()) !== -1){
+      state.day.tasks.push({id:"day-"+routine.id, name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
+    }
+    saveState();
+    nameInput.value = "";
+    routineWeekdaySelected = [false,false,false,false,false,false,false];
+    Array.prototype.forEach.call(routineWeekdaysEl.children, function(c,i){ paintWeekdayChip(c, i, false); });
+    showToast(name + " を とうろくしたよ！");
+    switchTab("today");
+    render();
+  });
+
+  if(state.timer) ensureTicking();
+  setInterval(function(){ if(!state.timer) render(); }, 60000);
+  render();
+})();
+</script>
