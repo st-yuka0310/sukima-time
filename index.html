@@ -275,6 +275,18 @@
   }
   .modal-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:700; font-size:1.05rem; }
 
+  /* history: a short weekly recap, opened from "きょう" */
+  .history-list{ display:flex; flex-direction:column; gap:14px; max-height:60vh; overflow-y:auto; }
+  .history-empty{ color:var(--ink-soft); font-size:.85rem; text-align:center; padding:12px 0; }
+  .history-day{ border-top:1px solid var(--border); padding-top:10px; }
+  .history-day:first-child{ border-top:none; padding-top:0; }
+  .history-day-head{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:6px; }
+  .history-date{ font-weight:700; font-size:.92rem; }
+  .history-stars{ color:var(--accent); font-weight:700; font-size:.85rem; font-variant-numeric: tabular-nums; }
+  .history-task-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+  .history-task-row{ font-size:.82rem; color:var(--ink-soft); }
+  .history-task-row.is-done{ color:var(--good); font-weight:700; }
+
   /* duration / time dial: drag or tap around the ring; release commits the value.
      The circle only ever shows the value; the +/- nudge buttons live in their own
      row underneath so a long label (e.g. "1じかん30ぷん") never has to share the
@@ -400,6 +412,7 @@
             <tbody id="tableBody"></tbody>
           </table>
         </div>
+        <button class="link-btn" id="openHistory">きろくを みる ▸</button>
       </section>
     </section>
 
@@ -490,6 +503,16 @@
       </div>
       <p class="field-error" id="presetModalError" role="alert"></p>
       <button type="button" class="btn btn-accent" id="presetModalConfirm">＋ ついかする</button>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="historyModalBackdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+      <div class="modal-head">
+        <span id="historyModalTitle">きろく</span>
+        <button type="button" class="legend-icon-btn" id="historyModalClose" aria-label="とじる">×</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
     </div>
   </div>
 </div>
@@ -585,6 +608,8 @@
 
   // ---- state --------------------------------------------------------------
 
+  var HISTORY_LIMIT = 7;
+
   function loadState(){
     var fallback = {
       fixed: {sleep:540, school:480, other:90},
@@ -593,6 +618,7 @@
         {id:"routine-seed-1", name:"しゅくだい", weekdays:[0,1,2,3,4,5,6]}
       ],
       day: null,
+      history: [],
       stars: 0,
       timer: null
     };
@@ -605,9 +631,14 @@
       });
       if(parseTimeToMinutes(parsed.wakeTime) === null) parsed.wakeTime = DEFAULT_WAKE_TIME;
       if(typeof parsed.stars !== "number") parsed.stars = 0;
+      if(!Array.isArray(parsed.history)) parsed.history = [];
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
       if(parsed.day && (!parsed.day.doneActivityCounts || typeof parsed.day.doneActivityCounts !== "object" || Array.isArray(parsed.day.doneActivityCounts))){
         parsed.day.doneActivityCounts = {};
+      }
+      if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
+      if(parsed.day && typeof parsed.day.weekday !== "number"){
+        parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
       }
       return parsed;
     }catch(e){ return fallback; }
@@ -625,11 +656,20 @@
   function ensureToday(){
     var ts = todayStr();
     if(state.day && state.day.date === ts) return;
+    if(state.day){
+      state.history.unshift({
+        date: state.day.date,
+        weekday: state.day.weekday,
+        tasks: state.day.tasks.map(function(t){ return {name:t.name, minutes:t.minutes, completed:t.completed}; }),
+        starsEarnedToday: state.day.starsEarnedToday || 0
+      });
+      state.history = state.history.slice(0, HISTORY_LIMIT);
+    }
     var wd = todayWeekday();
     var tasks = state.routines.filter(function(r){ return r.weekdays.indexOf(wd) !== -1; }).map(function(r){
       return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
     });
-    state.day = {date: ts, tasks: tasks, doneActivityCounts: {}};
+    state.day = {date: ts, weekday: wd, tasks: tasks, doneActivityCounts: {}, starsEarnedToday: 0};
     state.timer = null;
     saveState();
   }
@@ -835,6 +875,7 @@
     if(t){
       t.completed = true;
       state.stars += 1;
+      state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
       showToast(t.name + " できたね！ ⭐");
       popStarBadge();
     }
@@ -1270,6 +1311,7 @@
         card.querySelector(".suggest-pick").addEventListener("click", function(){
           state.day.doneActivityCounts[a.id] = (state.day.doneActivityCounts[a.id] || 0) + 1;
           state.stars += 1;
+          state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
           popStarBadge();
           showToast(a.name + " やったね！ ⭐");
           saveState(); render();
@@ -1438,6 +1480,73 @@
     card.querySelector(".suggest-name").textContent = preset.name;
     card.addEventListener("click", function(){ openPresetModal(preset.name, card); });
     presetGrid.appendChild(card);
+  });
+
+  // ---- history ("きろくを みる") -----------------------------------------------
+
+  function formatHistoryDate(dateStr){
+    var parts = dateStr.split("-");
+    return parseInt(parts[1],10) + "/" + parseInt(parts[2],10);
+  }
+
+  var historyModalBackdrop = document.getElementById("historyModalBackdrop");
+  var historyListEl = document.getElementById("historyList");
+  var historyOpenerEl = null;
+
+  function openHistoryModal(){
+    historyListEl.innerHTML = "";
+    if(state.history.length === 0){
+      historyListEl.innerHTML = '<p class="history-empty">まだ きろくが ないよ。1日 つかうと ここに でてくるよ。</p>';
+    } else {
+      state.history.forEach(function(entry){
+        var dayDiv = document.createElement("div");
+        dayDiv.className = "history-day";
+        var head = document.createElement("div");
+        head.className = "history-day-head";
+        var dateEl = document.createElement("span");
+        dateEl.className = "history-date";
+        dateEl.textContent = formatHistoryDate(entry.date) + "（" + WEEKDAY_NAMES[entry.weekday] + "）";
+        dateEl.style.color = weekdayColorVar(entry.weekday);
+        var starsEl = document.createElement("span");
+        starsEl.className = "history-stars";
+        starsEl.textContent = "⭐ " + (entry.starsEarnedToday || 0);
+        head.appendChild(dateEl); head.appendChild(starsEl);
+        dayDiv.appendChild(head);
+        if(entry.tasks.length === 0){
+          var none = document.createElement("p");
+          none.className = "history-task-row";
+          none.textContent = "よていは なかったよ";
+          dayDiv.appendChild(none);
+        } else {
+          var list = document.createElement("ul");
+          list.className = "history-task-list";
+          entry.tasks.forEach(function(t){
+            var li = document.createElement("li");
+            li.className = "history-task-row" + (t.completed ? " is-done" : "");
+            li.textContent = t.name + "（" + (t.minutes == null ? "みつもりなし" : formatMinutes(t.minutes)) + "）" + (t.completed ? " ✓" : "");
+            list.appendChild(li);
+          });
+          dayDiv.appendChild(list);
+        }
+        historyListEl.appendChild(dayDiv);
+      });
+    }
+    historyModalBackdrop.hidden = false;
+  }
+  function closeHistoryModal(){
+    historyModalBackdrop.hidden = true;
+    if(historyOpenerEl){ historyOpenerEl.focus(); historyOpenerEl = null; }
+  }
+  document.getElementById("openHistory").addEventListener("click", function(){
+    historyOpenerEl = this;
+    openHistoryModal();
+  });
+  document.getElementById("historyModalClose").addEventListener("click", closeHistoryModal);
+  historyModalBackdrop.addEventListener("click", function(ev){
+    if(ev.target === historyModalBackdrop) closeHistoryModal();
+  });
+  document.addEventListener("keydown", function(ev){
+    if(ev.key === "Escape" && !historyModalBackdrop.hidden) closeHistoryModal();
   });
 
   // ---- routine registration ("いつも" タブ) ----------------------------------
