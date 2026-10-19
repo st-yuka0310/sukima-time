@@ -220,7 +220,7 @@
   }
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
-  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible{
+  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
   .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
@@ -280,23 +280,24 @@
   .dial-wrap.dial-sm{ width:112px; height:112px; margin:0; }
   .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
   .dial-center{
-    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:4px; pointer-events:none; padding:0 30px;
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; padding:0 14px;
   }
-  .dial-sm .dial-center{ padding:0 20px; }
+  .dial-nudge-row{ display:flex; align-items:center; gap:8px; }
   .dial-value{
     font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
     font-variant-numeric: tabular-nums; color: var(--ink); text-align:center;
   }
   .dial-sm .dial-value{ font-size:.86rem; }
-  /* numeric fallback: same value, typed directly, for anyone who finds the drag too fiddly */
-  .dial-number-input{
-    pointer-events:auto; width:68px; text-align:center;
-    font: inherit; font-size:.76rem; font-weight:700; color:var(--accent);
-    border:none; border-bottom:1.5px solid var(--border); background:transparent; padding:2px 0;
+  /* tap-only fine adjustment: no keyboard, nudges by the dial's own snap step */
+  .dial-nudge-btn{
+    pointer-events:auto; flex:0 0 auto; width:26px; height:26px; border-radius:50%; border:none;
+    background: var(--accent-soft); color: var(--accent); font-size:1rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
-  .dial-sm .dial-number-input{ width:58px; font-size:.7rem; }
-  .dial-number-input:focus{ outline:none; border-bottom-color:var(--accent); }
+  .dial-nudge-btn:active{ transform: scale(.9); }
+  .dial-nudge-btn:disabled{ opacity:.4; cursor:default; }
+  .dial-sm .dial-nudge-btn{ width:22px; height:22px; font-size:.85rem; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -695,11 +696,6 @@
     var format = opts.format || function(v){ return String(v); };
     var tickFormat = opts.tickFormat || function(v){ return String(Math.round(v)); };
     var tickValues = opts.ticks || [min, min+(max-min)*0.25, min+(max-min)*0.5, min+(max-min)*0.75];
-    // the number field is an exact-entry alternative to dragging; defaults to a plain minute count
-    var inputType = opts.inputType || "text";
-    var inputMode = opts.inputMode || "numeric";
-    var inputParse = opts.inputParse || function(str){ var n = parseInt(str,10); return isNaN(n) ? null : n; };
-    var inputFormat = opts.inputFormat || function(v){ return String(Math.round(v)); };
 
     var svgNS = "http://www.w3.org/2000/svg";
     var root = document.getElementById(containerId);
@@ -711,14 +707,18 @@
         '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
       '</svg>' +
       '<div class="dial-center">' +
-        '<div class="dial-value">0</div>' +
-        '<input class="dial-number-input" type="' + inputType + '" inputmode="' + inputMode + '" pattern="[0-9]*" aria-label="すうじで にゅうりょく">' +
+        '<div class="dial-nudge-row">' +
+          '<button type="button" class="dial-nudge-btn" aria-label="すこし へらす">−</button>' +
+          '<div class="dial-value">0</div>' +
+          '<button type="button" class="dial-nudge-btn" aria-label="すこし ふやす">＋</button>' +
+        '</div>' +
       '</div>';
     var svg = root.querySelector(".dial-svg");
     var fillPath = root.querySelector(".dial-fill");
     var handle = root.querySelector(".dial-handle");
     var valueEl = root.querySelector(".dial-value");
-    var inputEl = root.querySelector(".dial-number-input");
+    var nudgeBtns = root.querySelectorAll(".dial-nudge-btn");
+    var nudgeDown = nudgeBtns[0], nudgeUp = nudgeBtns[1];
     var ticksG = root.querySelector(".dial-ticks");
     var cx = 80, cy = 80, rTrack = 58;
 
@@ -743,7 +743,8 @@
       handle.setAttribute("cx", p.x); handle.setAttribute("cy", p.y);
       fillPath.setAttribute("d", value <= min ? "" : arcPath(cx,cy,rTrack+6,rTrack-6,0,ang));
       valueEl.textContent = format(value);
-      if(document.activeElement !== inputEl) inputEl.value = inputFormat(value);
+      nudgeDown.disabled = value <= min;
+      nudgeUp.disabled = value >= max;
     }
 
     function valueFromClientPoint(clientX, clientY){
@@ -786,15 +787,9 @@
     svg.addEventListener("pointerup", pointerUp);
     svg.addEventListener("pointercancel", pointerUp);
 
-    inputEl.addEventListener("focus", function(){ inputEl.select(); });
-    inputEl.addEventListener("change", function(){
-      var parsed = inputParse(inputEl.value);
-      if(parsed == null || isNaN(parsed)){ inputEl.value = inputFormat(value); return; }
-      commit(parsed);
-    });
-    inputEl.addEventListener("keydown", function(ev){
-      if(ev.key === "Enter"){ ev.preventDefault(); inputEl.blur(); }
-    });
+    // tap-only fine adjustment, no keyboard: nudges by the same step the dial snaps to
+    nudgeDown.addEventListener("click", function(){ commit(value - step); });
+    nudgeUp.addEventListener("click", function(){ commit(value + step); });
 
     renderVisual();
     return {
@@ -1309,8 +1304,7 @@
 
   var wakeDial = buildDial("wakeDial", {
     min:0, max:1440, step:5, format:formatClockDisplay,
-    ticks:[{value:0,label:"0"},{value:360,label:"6"},{value:720,label:"12"},{value:1080,label:"18"}],
-    inputType:"time", inputMode:"", inputParse:parseTimeToMinutes, inputFormat:minutesToTimeString
+    ticks:[{value:0,label:"0"},{value:360,label:"6"},{value:720,label:"12"},{value:1080,label:"18"}]
   });
   wakeDial.onChange(function(v){
     state.wakeTime = minutesToTimeString(v);
