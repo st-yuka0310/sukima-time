@@ -275,29 +275,35 @@
   }
   .modal-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:700; font-size:1.05rem; }
 
-  /* duration / time dial: drag or tap around the ring; release commits the value */
-  .dial-wrap{ position:relative; width:150px; height:150px; margin:8px auto 0; flex:0 0 auto; }
-  .dial-wrap.dial-sm{ width:112px; height:112px; margin:0; }
+  /* duration / time dial: drag or tap around the ring; release commits the value.
+     The circle only ever shows the value; the +/- nudge buttons live in their own
+     row underneath so a long label (e.g. "1じかん30ぷん") never has to share the
+     cramped space inside the ring with a button. */
+  .dial-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; width:150px; margin:8px auto 0; flex:0 0 auto; }
+  .dial-wrap.dial-sm{ width:112px; margin:0; gap:8px; }
+  .dial-visual{ position:relative; width:100%; aspect-ratio:1/1; }
   .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
   .dial-center{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    pointer-events:none; padding:0 14px;
+    pointer-events:none; padding:0 22px; text-align:center;
   }
-  .dial-nudge-row{ display:flex; align-items:center; gap:8px; }
+  .dial-sm .dial-center{ padding:0 16px; }
   .dial-value{
     font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
-    font-variant-numeric: tabular-nums; color: var(--ink); text-align:center;
+    font-variant-numeric: tabular-nums; color: var(--ink);
   }
   .dial-sm .dial-value{ font-size:.86rem; }
+  .dial-nudge-row{ display:flex; align-items:center; justify-content:center; gap:20px; }
+  .dial-sm .dial-nudge-row{ gap:16px; }
   /* tap-only fine adjustment: no keyboard, nudges by the dial's own snap step */
   .dial-nudge-btn{
-    pointer-events:auto; flex:0 0 auto; width:26px; height:26px; border-radius:50%; border:none;
-    background: var(--accent-soft); color: var(--accent); font-size:1rem; font-weight:700;
+    flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:none;
+    background: var(--accent-soft); color: var(--accent); font-size:1.05rem; font-weight:700;
     display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
   .dial-nudge-btn:active{ transform: scale(.9); }
   .dial-nudge-btn:disabled{ opacity:.4; cursor:default; }
-  .dial-sm .dial-nudge-btn{ width:22px; height:22px; font-size:.85rem; }
+  .dial-sm .dial-nudge-btn{ width:24px; height:24px; font-size:.9rem; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -700,18 +706,18 @@
     var svgNS = "http://www.w3.org/2000/svg";
     var root = document.getElementById(containerId);
     root.innerHTML =
-      '<svg viewBox="0 0 160 160" class="dial-svg" aria-hidden="true">' +
-        '<circle cx="80" cy="80" r="58" fill="none" stroke="var(--border)" stroke-width="12"/>' +
-        '<path class="dial-fill" fill="var(--accent)"/>' +
-        '<g class="dial-ticks"></g>' +
-        '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
-      '</svg>' +
-      '<div class="dial-center">' +
-        '<div class="dial-nudge-row">' +
-          '<button type="button" class="dial-nudge-btn" aria-label="すこし へらす">−</button>' +
-          '<div class="dial-value">0</div>' +
-          '<button type="button" class="dial-nudge-btn" aria-label="すこし ふやす">＋</button>' +
-        '</div>' +
+      '<div class="dial-visual">' +
+        '<svg viewBox="0 0 160 160" class="dial-svg" aria-hidden="true">' +
+          '<circle cx="80" cy="80" r="58" fill="none" stroke="var(--border)" stroke-width="12"/>' +
+          '<path class="dial-fill" fill="var(--accent)"/>' +
+          '<g class="dial-ticks"></g>' +
+          '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
+        '</svg>' +
+        '<div class="dial-center"><div class="dial-value">0</div></div>' +
+      '</div>' +
+      '<div class="dial-nudge-row">' +
+        '<button type="button" class="dial-nudge-btn" aria-label="すこし へらす">−</button>' +
+        '<button type="button" class="dial-nudge-btn" aria-label="すこし ふやす">＋</button>' +
       '</div>';
     var svg = root.querySelector(".dial-svg");
     var fillPath = root.querySelector(".dial-fill");
