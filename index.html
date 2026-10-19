@@ -280,15 +280,23 @@
   .dial-wrap.dial-sm{ width:112px; height:112px; margin:0; }
   .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
   .dial-center{
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    pointer-events:none; padding:0 30px;
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:4px; pointer-events:none; padding:0 30px;
   }
-  .dial-sm .dial-center{ padding:0 22px; }
+  .dial-sm .dial-center{ padding:0 20px; }
   .dial-value{
     font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
     font-variant-numeric: tabular-nums; color: var(--ink); text-align:center;
   }
   .dial-sm .dial-value{ font-size:.86rem; }
+  /* numeric fallback: same value, typed directly, for anyone who finds the drag too fiddly */
+  .dial-number-input{
+    pointer-events:auto; width:68px; text-align:center;
+    font: inherit; font-size:.76rem; font-weight:700; color:var(--accent);
+    border:none; border-bottom:1.5px solid var(--border); background:transparent; padding:2px 0;
+  }
+  .dial-sm .dial-number-input{ width:58px; font-size:.7rem; }
+  .dial-number-input:focus{ outline:none; border-bottom-color:var(--accent); }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -305,6 +313,7 @@
   .suggest-icon{ width:34px; height:34px; }
   .suggest-name{ font-size:.85rem; font-weight:700; line-height:1.3; }
   .suggest-need{ font-size:.74rem; color:var(--ink-soft); }
+  .suggest-count{ font-size:.72rem; font-weight:700; color:var(--accent); }
   .suggest-pick{
     margin-top:4px; width:100%; border:1px solid var(--accent); background:transparent; color:var(--accent);
     font: inherit; font-weight:700; font-size:.78rem; padding:7px 8px; border-radius:12px; cursor:pointer;
@@ -590,6 +599,9 @@
       if(parseTimeToMinutes(parsed.wakeTime) === null) parsed.wakeTime = DEFAULT_WAKE_TIME;
       if(typeof parsed.stars !== "number") parsed.stars = 0;
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
+      if(parsed.day && (!parsed.day.doneActivityCounts || typeof parsed.day.doneActivityCounts !== "object" || Array.isArray(parsed.day.doneActivityCounts))){
+        parsed.day.doneActivityCounts = {};
+      }
       return parsed;
     }catch(e){ return fallback; }
   }
@@ -610,7 +622,7 @@
     var tasks = state.routines.filter(function(r){ return r.weekdays.indexOf(wd) !== -1; }).map(function(r){
       return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
     });
-    state.day = {date: ts, tasks: tasks, doneActivityIds: []};
+    state.day = {date: ts, tasks: tasks, doneActivityCounts: {}};
     state.timer = null;
     saveState();
   }
@@ -683,6 +695,11 @@
     var format = opts.format || function(v){ return String(v); };
     var tickFormat = opts.tickFormat || function(v){ return String(Math.round(v)); };
     var tickValues = opts.ticks || [min, min+(max-min)*0.25, min+(max-min)*0.5, min+(max-min)*0.75];
+    // the number field is an exact-entry alternative to dragging; defaults to a plain minute count
+    var inputType = opts.inputType || "text";
+    var inputMode = opts.inputMode || "numeric";
+    var inputParse = opts.inputParse || function(str){ var n = parseInt(str,10); return isNaN(n) ? null : n; };
+    var inputFormat = opts.inputFormat || function(v){ return String(Math.round(v)); };
 
     var svgNS = "http://www.w3.org/2000/svg";
     var root = document.getElementById(containerId);
@@ -693,11 +710,15 @@
         '<g class="dial-ticks"></g>' +
         '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
       '</svg>' +
-      '<div class="dial-center"><div class="dial-value">0</div></div>';
+      '<div class="dial-center">' +
+        '<div class="dial-value">0</div>' +
+        '<input class="dial-number-input" type="' + inputType + '" inputmode="' + inputMode + '" pattern="[0-9]*" aria-label="すうじで にゅうりょく">' +
+      '</div>';
     var svg = root.querySelector(".dial-svg");
     var fillPath = root.querySelector(".dial-fill");
     var handle = root.querySelector(".dial-handle");
     var valueEl = root.querySelector(".dial-value");
+    var inputEl = root.querySelector(".dial-number-input");
     var ticksG = root.querySelector(".dial-ticks");
     var cx = 80, cy = 80, rTrack = 58;
 
@@ -722,6 +743,7 @@
       handle.setAttribute("cx", p.x); handle.setAttribute("cy", p.y);
       fillPath.setAttribute("d", value <= min ? "" : arcPath(cx,cy,rTrack+6,rTrack-6,0,ang));
       valueEl.textContent = format(value);
+      if(document.activeElement !== inputEl) inputEl.value = inputFormat(value);
     }
 
     function valueFromClientPoint(clientX, clientY){
@@ -734,6 +756,12 @@
       var raw = min + (deg/360)*(max-min);
       var snapped = Math.round((raw-min)/step)*step + min;
       return Math.max(min, Math.min(max, snapped));
+    }
+
+    function commit(rawValue){
+      value = Math.max(min, Math.min(max, Math.round(rawValue)));
+      renderVisual();
+      if(onChangeCb) onChangeCb(value);
     }
 
     var dragging = false;
@@ -751,12 +779,22 @@
     function pointerUp(){
       if(!dragging) return;
       dragging = false;
-      if(onChangeCb) onChangeCb(value);
+      commit(value);
     }
     svg.addEventListener("pointerdown", pointerDown);
     svg.addEventListener("pointermove", pointerMove);
     svg.addEventListener("pointerup", pointerUp);
     svg.addEventListener("pointercancel", pointerUp);
+
+    inputEl.addEventListener("focus", function(){ inputEl.select(); });
+    inputEl.addEventListener("change", function(){
+      var parsed = inputParse(inputEl.value);
+      if(parsed == null || isNaN(parsed)){ inputEl.value = inputFormat(value); return; }
+      commit(parsed);
+    });
+    inputEl.addEventListener("keydown", function(ev){
+      if(ev.key === "Enter"){ ev.preventDefault(); inputEl.blur(); }
+    });
 
     renderVisual();
     return {
@@ -1219,25 +1257,20 @@
       fitting.forEach(function(a){
         var card = document.createElement("div");
         card.className = "suggest-card";
-        var done = state.day.doneActivityIds.indexOf(a.id) !== -1;
-        card.classList.toggle("is-selected", done);
+        var count = state.day.doneActivityCounts[a.id] || 0;
+        card.classList.toggle("is-selected", count > 0);
         card.innerHTML =
           icon(a.icon, "suggest-icon", "--accent") +
           '<div class="suggest-name"></div>' +
           '<div class="suggest-need">' + formatMinutes(a.need) + ' あれば できる</div>' +
-          '<button type="button" class="suggest-pick" aria-pressed="' + done + '">' + (done ? "やったね！ ⭐" : "やったよ！") + '</button>';
+          (count > 0 ? '<div class="suggest-count">きょう ' + count + 'かい やったよ ⭐</div>' : '') +
+          '<button type="button" class="suggest-pick">やったよ！</button>';
         card.querySelector(".suggest-name").textContent = a.name;
         card.querySelector(".suggest-pick").addEventListener("click", function(){
-          var idx = state.day.doneActivityIds.indexOf(a.id);
-          if(idx === -1){
-            state.day.doneActivityIds.push(a.id);
-            state.stars += 1;
-            popStarBadge();
-            showToast(a.name + " やったね！ ⭐");
-          } else {
-            state.day.doneActivityIds.splice(idx,1);
-            state.stars = Math.max(0, state.stars - 1);
-          }
+          state.day.doneActivityCounts[a.id] = (state.day.doneActivityCounts[a.id] || 0) + 1;
+          state.stars += 1;
+          popStarBadge();
+          showToast(a.name + " やったね！ ⭐");
           saveState(); render();
         });
         grid.appendChild(card);
@@ -1276,7 +1309,8 @@
 
   var wakeDial = buildDial("wakeDial", {
     min:0, max:1440, step:5, format:formatClockDisplay,
-    ticks:[{value:0,label:"0"},{value:360,label:"6"},{value:720,label:"12"},{value:1080,label:"18"}]
+    ticks:[{value:0,label:"0"},{value:360,label:"6"},{value:720,label:"12"},{value:1080,label:"18"}],
+    inputType:"time", inputMode:"", inputParse:parseTimeToMinutes, inputFormat:minutesToTimeString
   });
   wakeDial.onChange(function(v){
     state.wakeTime = minutesToTimeString(v);
@@ -1317,7 +1351,7 @@
 
   // ---- today's one-off task form ("そのひ" タブ) -----------------------------
 
-  var taskDial = buildDial("taskDial", {max:120, format:formatMinutes});
+  var taskDial = buildDial("taskDial", {max:240, format:formatMinutes});
   taskDial.onChange(function(){ /* value already committed on release */ });
 
   document.getElementById("toggleTable").addEventListener("click", function(){
@@ -1358,7 +1392,7 @@
   var presetModalName = document.getElementById("presetModalName");
   var presetModalError = document.getElementById("presetModalError");
   var presetModalConfirmBtn = document.getElementById("presetModalConfirm");
-  var presetModalDial = buildDial("presetModalDial", {max:120, format:formatMinutes});
+  var presetModalDial = buildDial("presetModalDial", {max:240, format:formatMinutes});
   var modalPendingName = null;
   var modalOpenerEl = null;
 
