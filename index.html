@@ -380,22 +380,18 @@
   <main class="tab-panels">
     <section class="tab-panel" data-panel="today" id="panel-today">
       <section class="card">
-        <h2>きょうの 24じかん</h2>
+        <h2>がっこう・すいみんなどの じかん</h2>
         <p class="today-weekday" id="todayWeekdayLabel"></p>
-        <div class="fixed-row">
-          <div class="fixed-row-head"><span class="fixed-name">おきる じかん</span></div>
-          <div class="dial-wrap dial-sm" id="wakeDial"></div>
-        </div>
         <div class="fixed-list" id="fixedList"></div>
         <div class="fixed-total">
-          <span>すいみん・がっこうなど ごうけい</span>
+          <span>がっこう・すいみんなど ごうけい</span>
           <strong id="fixedTotal">-</strong>
         </div>
-        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね</p>
+        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
       </section>
 
       <section class="card">
-        <h2>1にちの じかんの つかいかた</h2>
+        <h2>じゆうな じかんの つかいかた</h2>
         <div class="chart-wrap">
           <svg id="donut" viewBox="0 0 240 240" aria-hidden="true"></svg>
           <div class="donut-center">
@@ -531,27 +527,7 @@
     {key:"other",  name:"ごはん・おふろ など", min:0,   max:240, colorVar:"--fixed-other"},
     {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep"}
   ];
-  var DEFAULT_WAKE_TIME = "06:30";
-
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
-
-  function parseTimeToMinutes(value){
-    if(typeof value === "string" && /^\d{2}:\d{2}$/.test(value)){
-      var parts = value.split(":");
-      var h = parseInt(parts[0],10), m = parseInt(parts[1],10);
-      if(h >= 0 && h <= 23 && m >= 0 && m <= 59) return h*60+m;
-    }
-    return null;
-  }
-  function minutesToTimeString(v){
-    v = Math.max(0, Math.min(1439, Math.round(v)));
-    return pad2(Math.floor(v/60)) + ":" + pad2(v%60);
-  }
-  function formatClockDisplay(v){
-    v = Math.max(0, Math.min(1439, Math.round(v)));
-    var h = Math.floor(v/60), m = v%60;
-    return h + ":" + pad2(m);
-  }
 
   function weekdayColorVar(i){
     if(i === 0) return "var(--weekday-sun)";
@@ -613,7 +589,6 @@
   function loadState(){
     var fallback = {
       fixed: {sleep:540, school:480, other:90},
-      wakeTime: DEFAULT_WAKE_TIME,
       routines: [
         {id:"routine-seed-1", name:"しゅくだい", weekdays:[0,1,2,3,4,5,6]}
       ],
@@ -629,7 +604,6 @@
       FIXED_BLOCKS.forEach(function(b){
         if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
       });
-      if(parseTimeToMinutes(parsed.wakeTime) === null) parsed.wakeTime = DEFAULT_WAKE_TIME;
       if(typeof parsed.stars !== "number") parsed.stars = 0;
       if(!Array.isArray(parsed.history)) parsed.history = [];
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
@@ -919,10 +893,12 @@
     ensureToday();
     var tasks = state.day.tasks;
     var fixedSum = FIXED_BLOCKS.reduce(function(a,b){ return a + state.fixed[b.key]; }, 0);
+    // today's free-time budget: 24h minus school/sleep/meals. The chart below only ever
+    // shows what happens inside this budget, never the fixed blocks that produced it.
+    var freeTotal = Math.max(0, DAY_MINUTES - fixedSum);
     var tasksSum = tasks.reduce(function(a,t){ return a + (t.minutes||0); }, 0);
-    var usedSum = fixedSum + tasksSum;
-    var overflow = Math.max(0, usedSum - DAY_MINUTES);
-    var remaining = Math.max(0, DAY_MINUTES - usedSum);
+    var overflow = Math.max(0, tasksSum - freeTotal);
+    var remaining = Math.max(0, freeTotal - tasksSum);
     var isOver = overflow > 0;
     var runningTask = state.timer ? tasks.find(function(t){ return t.id === state.timer.taskId; }) : null;
 
@@ -933,7 +909,6 @@
     wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
     wdLabelEl.style.color = weekdayColorVar(wd);
 
-    wakeDial.set(parseTimeToMinutes(state.wakeTime) || parseTimeToMinutes(DEFAULT_WAKE_TIME));
     FIXED_BLOCKS.forEach(function(b){ fixedDials[b.key].set(state.fixed[b.key]); });
     document.getElementById("fixedTotal").textContent = formatMinutes(fixedSum);
 
@@ -954,35 +929,27 @@
       remainingValueEl.classList.toggle("is-over", isOver);
     }
 
-    // donut: ordered chronologically from wake-up time, sleep last (ends exactly at wake time).
-    // tasks whose minutes are not yet estimated (null) are left out of the chart until set.
-    var donutTotal = isOver ? usedSum : DAY_MINUTES;
-    var sleepBlock = FIXED_BLOCKS.filter(function(b){ return b.key === "sleep"; });
-    var wakingFixed = FIXED_BLOCKS.filter(function(b){ return b.key !== "sleep"; });
+    // donut: today's free-time budget only (not the whole 24h day). Tasks whose minutes
+    // are not yet estimated (null) are left out of the chart until a duration is set.
+    var donutTotal = isOver ? tasksSum : freeTotal;
     var coloredTasks = tasks.map(function(t, i){
       return {task:t, color: colorVar(i, i >= SERIES_COUNT)};
     });
-    var slices = wakingFixed.map(function(b){
-      return {key:"fixed-"+b.key, minutes: state.fixed[b.key], color: "var(" + b.colorVar + ")"};
-    }).concat(coloredTasks.filter(function(ct){ return ct.task.minutes != null; }).map(function(ct){
+    var slices = coloredTasks.filter(function(ct){ return ct.task.minutes != null; }).map(function(ct){
       return {key:ct.task.id, minutes:ct.task.minutes, color: ct.color, task:ct.task};
-    }));
+    });
     if(!isOver && remaining > 0){
       slices.push({key:"__remaining", minutes: remaining, color:"var(--remaining)"});
     }
-    slices = slices.concat(sleepBlock.map(function(b){
-      return {key:"fixed-"+b.key, minutes: state.fixed[b.key], color: "var(" + b.colorVar + ")"};
-    }));
 
     var svgNS = "http://www.w3.org/2000/svg";
     var svg = document.getElementById("donut");
     svg.innerHTML = "";
-    var wakeMinutes = parseTimeToMinutes(state.wakeTime) || parseTimeToMinutes(DEFAULT_WAKE_TIME);
     if(donutTotal <= 0){
       svg.innerHTML = '<circle cx="120" cy="120" r="100" fill="none" />';
     } else {
       var gapDeg = slices.length > 1 ? 2 : 0;
-      var angle = isOver ? 0 : (wakeMinutes/DAY_MINUTES)*360;
+      var angle = 0;
       var doneBadges = [];
       slices.forEach(function(s){
         var sweep = (s.minutes/donutTotal) * 360;
@@ -1030,41 +997,6 @@
           '<path d="M'+(p.x-5)+' '+p.y+' l3.5 4 l6.5 -8" fill="none" stroke="var(--good)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
         svg.appendChild(g);
       });
-
-      // hour ticks (clock face reference, plain numbers)
-      [0,6,12,18].forEach(function(h){
-        var ang = (h/24)*360;
-        var p1 = polar(120,120,100,ang), p2 = polar(120,120,106,ang);
-        var tickLine = document.createElementNS(svgNS,"line");
-        tickLine.setAttribute("x1",p1.x); tickLine.setAttribute("y1",p1.y);
-        tickLine.setAttribute("x2",p2.x); tickLine.setAttribute("y2",p2.y);
-        tickLine.setAttribute("stroke","var(--muted)"); tickLine.setAttribute("stroke-width","1.5");
-        svg.appendChild(tickLine);
-        var lp = polar(120,120,113,ang);
-        var label = document.createElementNS(svgNS,"text");
-        label.setAttribute("x",lp.x); label.setAttribute("y",lp.y+3);
-        label.setAttribute("text-anchor","middle"); label.setAttribute("font-size","9");
-        label.setAttribute("fill","var(--muted)");
-        label.textContent = h;
-        svg.appendChild(label);
-      });
-
-      // "now" marker: where we are in the 24h circle right now
-      var now = new Date();
-      var nowMinutes = now.getHours()*60 + now.getMinutes();
-      var nowAngle = (nowMinutes/DAY_MINUTES)*360;
-      var n1 = polar(120,120,48,nowAngle), n2 = polar(120,120,109,nowAngle);
-      var nowLine = document.createElementNS(svgNS,"line");
-      nowLine.id = "nowMarkerLine";
-      nowLine.setAttribute("x1",n1.x); nowLine.setAttribute("y1",n1.y);
-      nowLine.setAttribute("x2",n2.x); nowLine.setAttribute("y2",n2.y);
-      nowLine.setAttribute("stroke","var(--ink)"); nowLine.setAttribute("stroke-width","2"); nowLine.setAttribute("stroke-linecap","round");
-      svg.appendChild(nowLine);
-      var nowDot = document.createElementNS(svgNS,"circle");
-      nowDot.id = "nowMarkerDot";
-      nowDot.setAttribute("cx",n2.x); nowDot.setAttribute("cy",n2.y); nowDot.setAttribute("r","4");
-      nowDot.setAttribute("fill","var(--ink)");
-      svg.appendChild(nowDot);
     }
     if(runningTask){ ensureTicking(); } else { stopTicking(); }
 
@@ -1082,24 +1014,6 @@
     // legend
     var legend = document.getElementById("legend");
     legend.innerHTML = "";
-    function appendFixedLegendRow(b){
-      var key = "fixed-" + b.key;
-      var li = document.createElement("li");
-      li.classList.toggle("is-active", activeLegendId === key);
-      var dot = document.createElement("span");
-      dot.className = "legend-dot";
-      dot.style.background = "var(" + b.colorVar + ")";
-      var name = document.createElement("span");
-      name.className = "legend-name";
-      name.textContent = b.name;
-      var time = document.createElement("span");
-      time.className = "legend-time";
-      time.textContent = formatMinutes(state.fixed[b.key]);
-      li.appendChild(dot); li.appendChild(name); li.appendChild(time);
-      li.addEventListener("click", function(){ setActive(key); });
-      legend.appendChild(li);
-    }
-    wakingFixed.forEach(appendFixedLegendRow);
     tasks.forEach(function(t, i){
       var li = document.createElement("li");
       var dot = document.createElement("span");
@@ -1205,19 +1119,10 @@
       li2.addEventListener("click", function(){ setActive("__remaining"); });
       legend.appendChild(li2);
     }
-    sleepBlock.forEach(appendFixedLegendRow);
 
     // table
     var tbody = document.getElementById("tableBody");
     tbody.innerHTML = "";
-    function appendFixedTableRow(b){
-      var tr = document.createElement("tr");
-      var td1 = document.createElement("td"); td1.textContent = b.name;
-      var td2 = document.createElement("td"); td2.className="num"; td2.textContent = formatMinutes(state.fixed[b.key]);
-      tr.appendChild(td1); tr.appendChild(td2);
-      tbody.appendChild(tr);
-    }
-    wakingFixed.forEach(appendFixedTableRow);
     tasks.forEach(function(t){
       var tr = document.createElement("tr");
       var td1 = document.createElement("td");
@@ -1231,7 +1136,6 @@
     var tdR2 = document.createElement("td"); tdR2.className="num"; tdR2.textContent = formatMinutes(isOver ? overflow : remaining);
     trR.appendChild(tdR1); trR.appendChild(tdR2);
     tbody.appendChild(trR);
-    sleepBlock.forEach(appendFixedTableRow);
 
     // routine registration list (いつも タブ)
     var routineListEl = document.getElementById("routineList");
@@ -1348,16 +1252,7 @@
     btn.addEventListener("click", function(){ switchTab(btn.dataset.tab); });
   });
 
-  // ---- wake time + fixed-block dials (きょう タブ) --------------------------
-
-  var wakeDial = buildDial("wakeDial", {
-    min:0, max:1440, step:5, format:formatClockDisplay,
-    ticks:[{value:0,label:"0"},{value:360,label:"6"},{value:720,label:"12"},{value:1080,label:"18"}]
-  });
-  wakeDial.onChange(function(v){
-    state.wakeTime = minutesToTimeString(v);
-    saveState(); render();
-  });
+  // ---- fixed-block dials (きょう タブ) ---------------------------------------
 
   var fixedDials = {};
   var fixedListEl = document.getElementById("fixedList");
