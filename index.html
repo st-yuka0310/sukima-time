@@ -611,8 +611,14 @@
     if(typeof opts.max === "number" && v > opts.max) return fallback;
     return v;
   }
+  function findTaskById(id){
+    return state.day.tasks.find(function(x){ return x.id === id; });
+  }
+  function legendDimFactor(key){
+    return (activeLegendId && activeLegendId !== key) ? 0.35 : 1;
+  }
   function findRunningTask(){
-    return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
+    return state.timer ? findTaskById(state.timer.taskId) : undefined;
   }
   function makeLegendTimeSpan(text){
     var span = document.createElement("span");
@@ -767,7 +773,7 @@
         // the dial's displayed (snapped) value could permanently disagree with this stored value.
         parsed.fixed[b.key] = clamp(snapToStep(parsed.fixed[b.key], b.min, FIXED_DIAL_STEP), b.min, b.max);
       });
-      parsed.stars = sanitizeNumber(parsed.stars, 0);
+      parsed.stars = sanitizeNumber(parsed.stars, 0, {integer: true});
       parsed.stars = Math.max(0, parsed.stars);
       if(!Array.isArray(parsed.history)) parsed.history = [];
       // drop/repair any history entry whose shape is malformed, so a single corrupted stored
@@ -781,7 +787,7 @@
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
             return { name:t.name, minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
           }),
-          starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0))
+          starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0, {integer: true}))
         };
       }).slice(0, HISTORY_LIMIT);
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
@@ -801,7 +807,7 @@
           };
         });
       }
-      if(parsed.day) parsed.day.starsEarnedToday = sanitizeNumber(parsed.day.starsEarnedToday, 0);
+      if(parsed.day) parsed.day.starsEarnedToday = sanitizeNumber(parsed.day.starsEarnedToday, 0, {integer: true});
       if(parsed.day) parsed.day.starsEarnedToday = Math.max(0, parsed.day.starsEarnedToday);
       if(parsed.day && !isValidDateStr(parsed.day.date)){
         // an invalid stored date means this whole day object is untrustworthy — rebuild it
@@ -1071,7 +1077,7 @@
   function startTimer(taskId){
     ensureToday();
     if(state.timer) return;
-    var task = state.day.tasks.find(function(x){ return x.id === taskId; });
+    var task = findTaskById(taskId);
     if(!task || task.minutes == null) return;
     state.timer = {taskId: taskId, startedAt: Date.now()};
     saveState();
@@ -1213,7 +1219,7 @@
         var isRunning = s.task && runningTask && s.task.id === runningTask.id;
 
         if(isRunning){
-          var legendDim = (activeLegendId && activeLegendId !== s.key) ? 0.35 : 1;
+          var legendDim = legendDimFactor(s.key);
 
           var base = document.createElementNS(svgNS,"path");
           base.setAttribute("d", arcPath(120,120,100,66,gStart,gEnd));
@@ -1239,7 +1245,7 @@
           path.setAttribute("d", arcPath(120,120,100,66,gStart,gEnd));
           path.setAttribute("fill", s.color);
           path.dataset.key = s.key;
-          path.style.opacity = (activeLegendId && activeLegendId !== s.key) ? "0.35" : "1";
+          path.style.opacity = String(legendDimFactor(s.key));
           path.style.cursor = "pointer";
           path.addEventListener("click", function(){ setActive(s.key); });
           svg.appendChild(path);
@@ -1301,7 +1307,7 @@
           chip.textContent = formatMinutes(m);
           chip.addEventListener("click", function(){
             ensureToday();
-            var current = state.day.tasks.find(function(x){ return x.id === t.id; });
+            var current = findTaskById(t.id);
             if(!current) return;
             current.minutes = m;
             saveState(); render();
