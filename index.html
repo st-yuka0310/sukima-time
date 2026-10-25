@@ -1271,22 +1271,28 @@
         // "やってみる" folds the activity straight into today's schedule as a done task,
         // so it shows up in the chart/legend and actually spends some of the free-time budget.
         var count = playDoneCountToday(a);
+        var currentlyFits = a.need <= remaining && !isOver;
         card.classList.toggle("is-selected", count > 0);
         card.innerHTML =
           icon(a.icon, "suggest-icon", "--accent") +
           '<div class="suggest-name"></div>' +
           '<div class="suggest-need">' + formatMinutes(a.need) + ' あれば できる</div>' +
           (count > 0 ? '<div class="suggest-count">きょう ' + count + 'かい やったよ ⭐</div>' : '') +
-          '<button type="button" class="suggest-pick">やってみる</button>';
+          (currentlyFits ? '<button type="button" class="suggest-pick">やってみる</button>' : '');
         card.querySelector(".suggest-name").textContent = a.name;
-        card.querySelector(".suggest-pick").addEventListener("click", function(){
-          state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play" });
-          state.stars += 1;
-          state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
-          popStarBadge();
-          showToast(a.name + " やったね！ ⭐");
-          saveState(); render();
-        });
+        // only a currently-fitting activity gets a clickable button — a card kept visible
+        // just to show its done badge must not let kids re-log it and farm unlimited stars.
+        var pickBtn = card.querySelector(".suggest-pick");
+        if(pickBtn){
+          pickBtn.addEventListener("click", function(){
+            state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play" });
+            state.stars += 1;
+            state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
+            popStarBadge();
+            showToast(a.name + " やったね！ ⭐");
+            saveState(); render();
+          });
+        }
         grid.appendChild(card);
       });
     }
