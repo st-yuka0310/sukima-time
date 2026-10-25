@@ -1825,7 +1825,9 @@
   document.addEventListener("visibilitychange", function(){
     if(document.visibilityState === "visible"){
       var rolled = ensureToday();
-      if(rolled) render();
+      if(rolled || state.timer){
+        render();
+      }
     }
   });
   render();
