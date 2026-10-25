@@ -666,9 +666,17 @@
       var parsed = raw ? JSON.parse(raw) : null;
       if(!parsed || typeof parsed !== "object") parsed = fallback;
       if(!Array.isArray(parsed.routines)) parsed.routines = fallback.routines;
+      // drop/repair any routine whose weekdays isn't a valid array of numbers, so a single
+      // malformed stored routine can never crash ensureToday() at startup.
+      parsed.routines = parsed.routines.filter(function(r){
+        return r && typeof r === "object" && typeof r.id === "string" && typeof r.name === "string" && Array.isArray(r.weekdays);
+      }).map(function(r){
+        return { id:r.id, name:r.name, weekdays:r.weekdays.filter(function(w){ return typeof w === "number" && w>=0 && w<=6; }) };
+      });
       if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
       FIXED_BLOCKS.forEach(function(b){
         if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
+        parsed.fixed[b.key] = Math.max(b.min, Math.min(b.max, parsed.fixed[b.key]));
       });
       if(typeof parsed.stars !== "number") parsed.stars = 0;
       if(!Array.isArray(parsed.history)) parsed.history = [];
@@ -858,20 +866,24 @@
     }
 
     var dragging = false;
+    var activePointerId = null;
     function pointerDown(ev){
+      if(dragging) return;
       dragging = true;
+      activePointerId = ev.pointerId;
       value = valueFromClientPoint(ev.clientX, ev.clientY);
       renderVisual();
       try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
     }
     function pointerMove(ev){
-      if(!dragging) return;
+      if(!dragging || ev.pointerId !== activePointerId) return;
       value = valueFromClientPoint(ev.clientX, ev.clientY);
       renderVisual();
     }
-    function pointerUp(){
-      if(!dragging) return;
+    function pointerUp(ev){
+      if(!dragging || ev.pointerId !== activePointerId) return;
       dragging = false;
+      activePointerId = null;
       commit(value);
     }
     svg.addEventListener("pointerdown", pointerDown);
@@ -1262,15 +1274,19 @@
     var emptyState = document.getElementById("suggestEmpty");
     grid.innerHTML = "";
     function playDoneCountToday(a){
-      return tasks.filter(function(t){ return t.origin === "play" && t.name === a.name && t.completed; }).length;
+      return tasks.filter(function(t){
+        return t.origin === "play" && (t.activityId === a.id || (!t.activityId && t.name === a.name)) && t.completed;
+      }).length;
     }
     function activityFits(a){
       return a.need <= remaining && !isOver;
     }
     // keep an activity visible once it's been done today, even if doing it used up the
     // free time it needed — otherwise its "done" badge would vanish the instant it's earned.
-    var fitting = ACTIVITIES.filter(function(a){ return activityFits(a) || playDoneCountToday(a) > 0; })
-      .sort(function(a,b){ return b.need - a.need; });
+    var fitting = ACTIVITIES.map(function(a){
+      return { activity: a, count: playDoneCountToday(a), fits: activityFits(a) };
+    }).filter(function(x){ return x.fits || x.count > 0; })
+      .sort(function(x,y){ return y.activity.need - x.activity.need; });
 
     if(fitting.length === 0){
       grid.hidden = true;
@@ -1285,13 +1301,12 @@
     } else {
       grid.hidden = false;
       emptyState.hidden = true;
-      fitting.forEach(function(a){
+      fitting.forEach(function(x){
+        var a = x.activity, count = x.count, currentlyFits = x.fits;
         var card = document.createElement("div");
         card.className = "suggest-card";
         // "やってみる" folds the activity straight into today's schedule as a done task,
         // so it shows up in the chart/legend and actually spends some of the free-time budget.
-        var count = playDoneCountToday(a);
-        var currentlyFits = activityFits(a);
         card.classList.toggle("is-selected", count > 0);
         card.innerHTML =
           icon(a.icon, "suggest-icon", "--accent") +
@@ -1305,7 +1320,7 @@
         var pickBtn = card.querySelector(".suggest-pick");
         if(pickBtn){
           pickBtn.addEventListener("click", function(){
-            state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play" });
+            state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play", activityId: a.id });
             state.stars += 1;
             state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
             popStarBadge();
@@ -1563,7 +1578,8 @@
   // ---- routine registration ("いつも" タブ) ----------------------------------
 
   var routineWeekdaysEl = document.getElementById("routineWeekdays");
-  var routineWeekdaySelected = [false,false,false,false,false,false,false];
+  function emptyWeekdaySelection(){ return WEEKDAY_NAMES.map(function(){ return false; }); }
+  var routineWeekdaySelected = emptyWeekdaySelection();
   function paintWeekdayChip(btn, wi, pressed){
     btn.setAttribute("aria-pressed", String(pressed));
     if(pressed){
@@ -1605,7 +1621,7 @@
     }
     saveState();
     nameInput.value = "";
-    routineWeekdaySelected = [false,false,false,false,false,false,false];
+    routineWeekdaySelected = emptyWeekdaySelection();
     Array.prototype.forEach.call(routineWeekdaysEl.children, function(c,i){ paintWeekdayChip(c, i, false); });
     showToast(name + " を とうろくしたよ！");
     switchTab("today");
