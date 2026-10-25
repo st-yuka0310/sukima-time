@@ -606,6 +606,7 @@
     return span;
   }
   function deleteTask(id){
+    ensureToday();
     if(state.timer && state.timer.taskId === id){
       state.timer = null;
       stopTicking();
@@ -708,7 +709,7 @@
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
       var parsed = raw ? JSON.parse(raw) : null;
-      if(!parsed || typeof parsed !== "object") parsed = fallback;
+      if(!parsed || typeof parsed !== "object" || Array.isArray(parsed)) parsed = fallback;
       if(!Array.isArray(parsed.routines)) parsed.routines = fallback.routines;
       // drop/repair any routine whose weekdays isn't a valid array of numbers, so a single
       // malformed stored routine can never crash ensureToday() at startup.
@@ -1130,8 +1131,16 @@
     // donut: today's free-time budget only (not the whole 24h day). Tasks whose minutes
     // are not yet estimated (null) are left out of the chart until a duration is set.
     var donutTotal = isOver ? tasksSum : freeTotal;
+    var chartableIndex = 0;
     var coloredTasks = tasks.map(function(t, i){
-      return {task:t, color: colorVar(i, i >= SERIES_COUNT)};
+      if(t.minutes == null){
+        // pending tasks aren't charted as donut slices, but their legend row still shows
+        // a colored dot: keep using the raw array index for that, unchanged from before.
+        return {task:t, color: colorVar(i, i >= SERIES_COUNT)};
+      }
+      var color = colorVar(chartableIndex, chartableIndex >= SERIES_COUNT);
+      chartableIndex++;
+      return {task:t, color: color};
     });
     var slices = coloredTasks.filter(function(ct){ return ct.task.minutes != null; }).map(function(ct){
       return {key:ct.task.id, minutes:ct.task.minutes, color: ct.color, task:ct.task};
@@ -1278,6 +1287,14 @@
         check.setAttribute("viewBox","0 0 24 24");
         check.innerHTML = '<circle cx="12" cy="12" r="11" fill="none" stroke="var(--good)" stroke-width="2"/><path d="M7 12.5l3.2 3.5L17 9" fill="none" stroke="var(--good)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
         li.appendChild(time1); li.appendChild(check);
+        var delDone = document.createElement("button");
+        delDone.className = "legend-icon-btn";
+        delDone.setAttribute("aria-label", t.name + " を けす");
+        delDone.textContent = "×";
+        delDone.addEventListener("click", function(){
+          deleteTask(t.id);
+        });
+        li.appendChild(delDone);
       } else if(isRunning){
         var time2 = makeLegendTimeSpan(formatClock(running ? running.remainingSec : 0));
         time2.id = "legendCountdown";
@@ -1378,6 +1395,7 @@
       del.setAttribute("aria-label", r.name + " を やめる");
       del.textContent = "×";
       del.addEventListener("click", function(){
+        ensureToday();
         state.routines = state.routines.filter(function(x){ return x.id !== r.id; });
         state.day.tasks = state.day.tasks.filter(function(x){ return x.routineId !== r.id || x.completed; });
         if(state.timer){
@@ -1592,7 +1610,15 @@
     modalPendingName = null;
     presetModalDial.set(0);
     presetModalError.textContent = "";
-    if(modalOpenerEl && document.body.contains(modalOpenerEl) && modalOpenerEl.offsetParent !== null){ modalOpenerEl.focus(); }
+    if(modalOpenerEl && document.body.contains(modalOpenerEl) && modalOpenerEl.offsetParent !== null){
+      modalOpenerEl.focus();
+    } else {
+      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
+      // a conventional, always-visible focus target instead of letting focus fall through
+      // to <body>.
+      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
+      if(todayTabBtn) todayTabBtn.focus();
+    }
     modalOpenerEl = null;
   }
 
@@ -1604,8 +1630,12 @@
     ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
     if(!presetModalDial.get()){ presetModalError.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
     var name = modalPendingName, minutes = presetModalDial.get();
-    closePresetModal();
+    // addVariableTask() switches to the "today" tab, which may hide the opener (the preset
+    // card button lives in panel-oneoff). Run it BEFORE closePresetModal() so that function's
+    // focus-restore guard sees the opener's post-tab-switch visibility, not its stale
+    // pre-switch visibility.
     addVariableTask(name, minutes);
+    closePresetModal();
   });
 
   PRESET_TASKS.forEach(function(preset){
