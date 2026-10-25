@@ -600,9 +600,11 @@
     return "var(--ink)";
   }
 
-  function todayStr(){
-    var d = new Date();
+  function formatDateStr(d){
     return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
+  }
+  function todayStr(){
+    return formatDateStr(new Date());
   }
   function todayWeekday(){ return new Date().getDay(); }
 
@@ -735,7 +737,7 @@
 
   function ensureToday(){
     var now = new Date();
-    var ts = now.getFullYear() + "-" + pad2(now.getMonth()+1) + "-" + pad2(now.getDate());
+    var ts = formatDateStr(now);
     if(state.day && state.day.date === ts) return;
     if(state.day){
       state.history.unshift({
@@ -1158,7 +1160,7 @@
     legend.innerHTML = "";
     tasks.forEach(function(t, i){
       var li = document.createElement("li");
-      var dot = makeDot("legend-dot", colorVar(i, i >= SERIES_COUNT));
+      var dot = makeDot("legend-dot", coloredTasks[i].color);
       var name = document.createElement("span");
       name.className = "legend-name";
       name.textContent = t.name;
