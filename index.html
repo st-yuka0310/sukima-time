@@ -586,9 +586,12 @@
   var WEEKDAY_NAMES = ["日","月","火","水","木","金","土"]; // index matches Date#getDay()
 
   var FIXED_BLOCKS = [
-    {key:"school", name:"がっこう",         min:0,   max:600, colorVar:"--fixed-school"},
-    {key:"other",  name:"ごはん・おふろ など", min:0,   max:240, colorVar:"--fixed-other"},
-    {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep"}
+    {key:"school", name:"がっこう",         min:0,   max:600, colorVar:"--fixed-school",
+      ticks:[{value:0,label:"0"},{value:180,label:"3"},{value:360,label:"6"},{value:540,label:"9"}]},
+    {key:"other",  name:"ごはん・おふろ など", min:0,   max:240, colorVar:"--fixed-other",
+      ticks:[{value:0,label:"0"},{value:60,label:"1"},{value:120,label:"2"},{value:180,label:"3"}]},
+    {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep",
+      ticks:[{value:300,label:"5"},{value:420,label:"7"},{value:540,label:"9"},{value:660,label:"11"}]}
   ];
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
 
@@ -673,6 +676,7 @@
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
       if(parsed.day && typeof parsed.day.weekday !== "number"){
         parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
+        if(isNaN(parsed.day.weekday)) parsed.day.weekday = todayWeekday();
       }
       return parsed;
     }catch(e){ return fallback; }
@@ -744,6 +748,7 @@
 
   function arcPath(cx, cy, rOuter, rInner, startDeg, endDeg){
     if(endDeg <= startDeg) return "";
+    if(endDeg - startDeg >= 360) endDeg = startDeg + 359.9;
     var p1 = polar(cx, cy, rOuter, endDeg);
     var p2 = polar(cx, cy, rOuter, startDeg);
     var p3 = polar(cx, cy, rInner, startDeg);
@@ -918,15 +923,21 @@
     render();
   }
 
-  function tick(){
-    if(!state.timer){ stopTicking(); return; }
+  function runningRemaining(){
+    if(!state.timer) return null;
     var t = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
-    if(!t || !t.minutes){ state.timer = null; saveState(); stopTicking(); render(); return; }
+    if(!t || !t.minutes) return null;
     var plannedSec = t.minutes * 60;
     var elapsedSec = Math.floor((Date.now() - state.timer.startedAt) / 1000);
-    var remainingSec = plannedSec - elapsedSec;
-    if(remainingSec <= 0){ completeRunningTimer(); return; }
-    updateRunningDisplays(t, remainingSec, plannedSec);
+    return { task: t, plannedSec: plannedSec, remainingSec: Math.max(0, plannedSec - elapsedSec) };
+  }
+
+  function tick(){
+    if(!state.timer){ stopTicking(); return; }
+    var r = runningRemaining();
+    if(!r){ state.timer = null; saveState(); stopTicking(); render(); return; }
+    if(r.remainingSec <= 0){ completeRunningTimer(); return; }
+    updateRunningDisplays(r.task, r.remainingSec, r.plannedSec);
   }
 
   function updateRunningDisplays(t, remainingSec, plannedSec){
@@ -976,11 +987,9 @@
     var remainingValueEl = document.getElementById("remainingValue");
     remainingValueEl.classList.remove("is-live");
     if(runningTask){
-      var plannedSec = runningTask.minutes*60;
-      var elapsedSec = Math.floor((Date.now()-state.timer.startedAt)/1000);
-      var remSec = Math.max(0, plannedSec-elapsedSec);
+      var running = runningRemaining();
       remainingLabelEl.textContent = runningTask.name;
-      remainingValueEl.textContent = formatClock(remSec);
+      remainingValueEl.textContent = formatClock(running ? running.remainingSec : 0);
       remainingValueEl.classList.add("is-live");
       remainingValueEl.classList.remove("is-over");
     } else {
@@ -1030,9 +1039,8 @@
           overlay.id = "timerOverlayPath";
           overlay.dataset.start = gStart;
           overlay.dataset.end = gEnd;
-          var plannedSec2 = s.task.minutes*60;
-          var elapsedSec2 = Math.floor((Date.now()-state.timer.startedAt)/1000);
-          var frac = Math.max(0, (plannedSec2-elapsedSec2)/plannedSec2);
+          var running2 = runningRemaining();
+          var frac = running2 ? running2.remainingSec/running2.plannedSec : 0;
           overlay.setAttribute("d", arcPath(120,120,100,66,gStart, gStart+(gEnd-gStart)*frac));
           overlay.setAttribute("fill", s.color);
           svg.appendChild(overlay);
@@ -1128,9 +1136,8 @@
         var time2 = document.createElement("span");
         time2.className = "legend-time";
         time2.id = "legendCountdown";
-        var plannedSec3 = t.minutes*60;
-        var elapsedSec3 = Math.floor((Date.now()-state.timer.startedAt)/1000);
-        time2.textContent = formatClock(Math.max(0, plannedSec3-elapsedSec3));
+        var running3 = runningRemaining();
+        time2.textContent = formatClock(running3 ? running3.remainingSec : 0);
         var stop = document.createElement("button");
         stop.className = "legend-icon-btn is-stop";
         stop.setAttribute("aria-label", t.name + " の たいまーを やめる");
@@ -1352,7 +1359,7 @@
 
     var dial = buildDial(dialWrap.id, {
       min:b.min, max:b.max, step:15, format:formatMinutes,
-      tickFormat: function(v){ return String(Math.round(v/60)); }
+      ticks: b.ticks
     });
     dial.set(state.fixed[b.key]);
     dial.onChange(function(v){
@@ -1594,7 +1601,7 @@
   });
 
   if(state.timer) ensureTicking();
-  setInterval(function(){ if(!state.timer) render(); }, 60000);
+  setInterval(function(){ ensureToday(); if(!state.timer) render(); }, 60000);
   render();
 })();
 </script>
