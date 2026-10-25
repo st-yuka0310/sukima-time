@@ -716,7 +716,9 @@
       if(parsed.day && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.day.date)) parsed.day.date = todayStr();
       if(parsed.day && typeof parsed.day.weekday !== "number"){
         parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
-        if(isNaN(parsed.day.weekday)) parsed.day.weekday = todayWeekday();
+      }
+      if(parsed.day && (typeof parsed.day.weekday !== "number" || isNaN(parsed.day.weekday) || parsed.day.weekday < 0 || parsed.day.weekday > 6)){
+        parsed.day.weekday = todayWeekday();
       }
       return parsed;
     }catch(e){ return fallback; }
@@ -732,7 +734,8 @@
   var toastHandle = null;
 
   function ensureToday(){
-    var ts = todayStr();
+    var now = new Date();
+    var ts = now.getFullYear() + "-" + pad2(now.getMonth()+1) + "-" + pad2(now.getDate());
     if(state.day && state.day.date === ts) return;
     if(state.day){
       state.history.unshift({
@@ -743,7 +746,7 @@
       });
       state.history = state.history.slice(0, HISTORY_LIMIT);
     }
-    var wd = todayWeekday();
+    var wd = now.getDay();
     var tasks = state.routines.filter(function(r){ return r.weekdays.indexOf(wd) !== -1; }).map(function(r){
       return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
     });
@@ -928,6 +931,7 @@
       if(!dragging || ev.pointerId !== activePointerId) return;
       dragging = false;
       activePointerId = null;
+      commit(value);
     });
 
     // tap-only fine adjustment, no keyboard: nudges by the same step the dial snaps to
@@ -953,6 +957,7 @@
   }
 
   function startTimer(taskId){
+    if(state.timer) return;
     state.timer = {taskId: taskId, startedAt: Date.now()};
     saveState();
     ensureTicking();
@@ -984,7 +989,7 @@
   function runningRemaining(){
     if(!state.timer) return null;
     var t = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
-    if(!t || !t.minutes) return null;
+    if(!t || t.minutes == null) return null;
     var plannedSec = t.minutes * 60;
     var elapsedSec = Math.floor((Date.now() - state.timer.startedAt) / 1000);
     return { task: t, plannedSec: plannedSec, remainingSec: Math.max(0, plannedSec - elapsedSec) };
@@ -1364,7 +1369,8 @@
           (currentlyFits ? '<button type="button" class="suggest-pick">やってみる</button>' : '');
         card.querySelector(".suggest-name").textContent = a.name;
         // only a currently-fitting activity gets a clickable button — a card kept visible
-        // just to show its done badge must not let kids re-log it and farm unlimited stars.
+        // just to show its done badge must not let kids re-log it once it no longer fits
+        // the remaining time budget (re-logging while it still fits is fine and intended).
         var pickBtn = card.querySelector(".suggest-pick");
         if(pickBtn){
           pickBtn.addEventListener("click", function(){
