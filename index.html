@@ -667,9 +667,9 @@
     popStarBadge();
     showToast(message);
   }
-  function buildTasksForWeekday(routines, weekday){
+  function buildTasksForWeekday(routines, weekday, dateStr){
     return routines.filter(function(r){ return r.weekdays.indexOf(weekday) !== -1; }).map(function(r){
-      return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
+      return {id:"day-"+dateStr+"-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
     });
   }
 
@@ -732,6 +732,13 @@
   function icon(key, className, colorVarName){
     var shape = ICON_SHAPES[key] || ICON_SHAPES.star;
     return '<svg class="' + className + '" viewBox="0 0 42 42" aria-hidden="true" style="color:var(' + colorVarName + ')">' + shape + '</svg>';
+  }
+  // shared circle+checkmark "done" badge markup, used by both the donut's doneBadges and
+  // the legend's completed-task check icon. circleAttrs/checkStrokeWidth let each call site
+  // reproduce its own exact sizing/coloring while sharing the underlying SVG construction.
+  function doneCheckmarkMarkup(cx, cy, r, circleAttrs, checkD, checkStrokeWidth){
+    return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" '+circleAttrs+'/>' +
+      '<path d="'+checkD+'" fill="none" stroke="var(--good)" stroke-width="'+checkStrokeWidth+'" stroke-linecap="round" stroke-linejoin="round"/>';
   }
 
   // ---- state --------------------------------------------------------------
@@ -819,7 +826,7 @@
         parsed.day = {
           date: freshDate,
           weekday: freshWeekday,
-          tasks: buildTasksForWeekday(parsed.routines, freshWeekday),
+          tasks: buildTasksForWeekday(parsed.routines, freshWeekday, freshDate),
           starsEarnedToday: 0
         };
       }
@@ -861,7 +868,7 @@
       state.history = state.history.slice(0, HISTORY_LIMIT);
     }
     var wd = now.getDay();
-    var tasks = buildTasksForWeekday(state.routines, wd);
+    var tasks = buildTasksForWeekday(state.routines, wd, ts);
     state.day = {date: ts, weekday: wd, tasks: tasks, starsEarnedToday: 0};
     state.timer = null;
     activeLegendId = null;
@@ -1078,7 +1085,7 @@
     ensureToday();
     if(state.timer) return;
     var task = findTaskById(taskId);
-    if(!task || task.minutes == null) return;
+    if(!task || task.minutes == null || task.completed) return;
     state.timer = {taskId: taskId, startedAt: Date.now()};
     saveState();
     ensureTicking();
@@ -1256,9 +1263,8 @@
       });
       doneBadges.forEach(function(p){
         var g = document.createElementNS(svgNS,"g");
-        g.innerHTML =
-          '<circle cx="'+p.x+'" cy="'+p.y+'" r="10" fill="var(--surface)"/>' +
-          '<path d="M'+(p.x-5)+' '+p.y+' l3.5 4 l6.5 -8" fill="none" stroke="var(--good)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+        g.innerHTML = doneCheckmarkMarkup(p.x, p.y, 10, 'fill="var(--surface)"',
+          'M'+(p.x-5)+' '+p.y+' l3.5 4 l6.5 -8', 2.4);
         svg.appendChild(g);
       });
     }
@@ -1328,7 +1334,8 @@
         var check = document.createElement("svg");
         check.className = "legend-check";
         check.setAttribute("viewBox","0 0 24 24");
-        check.innerHTML = '<circle cx="12" cy="12" r="11" fill="none" stroke="var(--good)" stroke-width="2"/><path d="M7 12.5l3.2 3.5L17 9" fill="none" stroke="var(--good)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+        check.innerHTML = doneCheckmarkMarkup(12, 12, 11, 'fill="none" stroke="var(--good)" stroke-width="2"',
+          'M7 12.5l3.2 3.5L17 9', 2.2);
         li.appendChild(time1); li.appendChild(check);
         var delDone = makeDeleteButton(t.name, function(){ deleteTask(t.id); });
         li.appendChild(delDone);
@@ -1448,7 +1455,7 @@
       }).length;
     }
     function activityFits(a){
-      return a.need <= remaining && !isOver;
+      return a.need <= remaining;
     }
     // keep an activity visible once it's been done today, even if doing it used up the
     // free time it needed — otherwise its "done" badge would vanish the instant it's earned.
@@ -1809,7 +1816,7 @@
     var routine = {id: newId("routine"), name: name, weekdays: days};
     state.routines.push(routine);
     if(days.indexOf(state.day.weekday) !== -1){
-      state.day.tasks.push({id:"day-"+routine.id, name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
+      state.day.tasks.push({id:"day-"+state.day.date+"-"+routine.id, name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
     }
     saveState();
     nameInput.value = "";
