@@ -592,6 +592,7 @@
       ticks:[{value:300,label:"5"},{value:420,label:"7"},{value:540,label:"9"},{value:660,label:"11"}]}
   ];
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
+  function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
 
   function weekdayColorVar(i){
     if(i === 0) return "var(--weekday-sun)";
@@ -676,12 +677,43 @@
       if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
       FIXED_BLOCKS.forEach(function(b){
         if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
-        parsed.fixed[b.key] = Math.max(b.min, Math.min(b.max, parsed.fixed[b.key]));
+        parsed.fixed[b.key] = clamp(parsed.fixed[b.key], b.min, b.max);
       });
       if(typeof parsed.stars !== "number") parsed.stars = 0;
       if(!Array.isArray(parsed.history)) parsed.history = [];
+      // drop/repair any history entry whose shape is malformed, so a single corrupted stored
+      // entry can never crash openHistoryModal() (entry.tasks.forEach, formatHistoryDate, etc.).
+      parsed.history = parsed.history.filter(function(h){
+        return h && typeof h === "object" && typeof h.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.date) && Array.isArray(h.tasks);
+      }).map(function(h){
+        return {
+          date: h.date,
+          weekday: (typeof h.weekday === "number") ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
+          tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
+            return { name:t.name, minutes:(typeof t.minutes==="number")?t.minutes:null, completed:!!t.completed };
+          }),
+          starsEarnedToday: (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0
+        };
+      });
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
+      // drop/repair any task whose shape is malformed, so a single corrupted stored task
+      // can never crash render() (which reads t.name/t.minutes/t.completed unconditionally).
+      if(parsed.day){
+        parsed.day.tasks = parsed.day.tasks.filter(function(t){
+          return t && typeof t === "object" && typeof t.id === "string" && typeof t.name === "string";
+        }).map(function(t){
+          return {
+            id: t.id, name: t.name,
+            minutes: (typeof t.minutes === "number") ? t.minutes : null,
+            completed: !!t.completed,
+            origin: (typeof t.origin === "string") ? t.origin : "variable",
+            routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
+            activityId: (typeof t.activityId === "string") ? t.activityId : undefined
+          };
+        });
+      }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
+      if(parsed.day && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.day.date)) parsed.day.date = todayStr();
       if(parsed.day && typeof parsed.day.weekday !== "number"){
         parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
         if(isNaN(parsed.day.weekday)) parsed.day.weekday = todayWeekday();
@@ -856,11 +888,11 @@
       if(deg < 0) deg += 360;
       var raw = min + (deg/360)*(max-min);
       var snapped = Math.round((raw-min)/step)*step + min;
-      return Math.max(min, Math.min(max, snapped));
+      return clamp(snapped, min, max);
     }
 
     function commit(rawValue){
-      value = Math.max(min, Math.min(max, Math.round(rawValue)));
+      value = clamp(Math.round(rawValue), min, max);
       renderVisual();
       if(onChangeCb) onChangeCb(value);
     }
@@ -890,6 +922,13 @@
     svg.addEventListener("pointermove", pointerMove);
     svg.addEventListener("pointerup", pointerUp);
     svg.addEventListener("pointercancel", pointerUp);
+    // safety net: if pointer capture is ever lost without a pointerup/pointercancel reaching
+    // us (dropped event, OS-level interruption, etc.), make sure the dial doesn't get stuck.
+    svg.addEventListener("lostpointercapture", function(ev){
+      if(!dragging || ev.pointerId !== activePointerId) return;
+      dragging = false;
+      activePointerId = null;
+    });
 
     // tap-only fine adjustment, no keyboard: nudges by the same step the dial snaps to
     nudgeDown.addEventListener("click", function(){ commit(value - step); });
@@ -898,7 +937,7 @@
     renderVisual();
     return {
       get: function(){ return value; },
-      set: function(v){ value = Math.max(min, Math.min(max, v)); renderVisual(); },
+      set: function(v){ value = clamp(v, min, max); renderVisual(); },
       onChange: function(cb){ onChangeCb = cb; }
     };
   }
@@ -1092,7 +1131,16 @@
     // warning banner
     var warnSlot = document.getElementById("warningSlot");
     warnSlot.innerHTML = "";
-    if(isOver){
+    if(fixedSum > DAY_MINUTES){
+      // school+other+sleep alone already exceed the day: freeTotal silently clamps to 0,
+      // which would otherwise look like an (unexplained) task-overflow. Different root
+      // cause, different message, and it takes priority over the isOver check below.
+      warnSlot.innerHTML =
+        '<div class="warning-banner">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
+        '<span><strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ダイヤルを みなおしてね。</span>' +
+        '</div>';
+    } else if(isOver){
       warnSlot.innerHTML =
         '<div class="warning-banner">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
