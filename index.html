@@ -113,6 +113,12 @@
   .topbar{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .topbar-title{ display:flex; align-items:center; gap:8px; font-weight:900; font-size:1.2rem; min-width:0; }
   .topbar-title svg{ width:30px; height:30px; flex:0 0 auto; }
+  .topbar-right{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+  .help-btn{
+    width:34px; height:34px; border-radius:50%; border:none; flex:0 0 auto;
+    background: var(--accent-soft); color: var(--accent); font-weight:900; font-size:1rem;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
   .star-badge{
     display:flex; align-items:center; gap:5px; background:var(--accent-soft); color:var(--accent);
     border-radius:999px; padding:7px 13px; font-weight:700; font-size:.92rem; font-variant-numeric: tabular-nums;
@@ -220,7 +226,8 @@
   }
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
-  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible{
+  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible,
+  .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
   .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
@@ -286,6 +293,13 @@
   .history-task-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
   .history-task-row{ font-size:.82rem; color:var(--ink-soft); }
   .history-task-row.is-done{ color:var(--good); font-weight:700; }
+
+  /* usage guide */
+  .help-list{ display:flex; flex-direction:column; gap:16px; max-height:70vh; overflow-y:auto; }
+  .help-section{ display:flex; gap:12px; align-items:flex-start; }
+  .help-icon{ width:30px; height:30px; flex:0 0 auto; color:var(--accent); margin-top:2px; }
+  .help-body h3{ margin:0 0 4px; font-size:.92rem; font-weight:700; }
+  .help-body p{ margin:0; font-size:.83rem; color:var(--ink-soft); line-height:1.6; }
 
   /* duration / time dial: drag or tap around the ring; release commits the value.
      The circle only ever shows the value; the +/- nudge buttons live in their own
@@ -369,9 +383,12 @@
       </svg>
       <span>すきまタイム</span>
     </div>
-    <div class="star-badge" id="starBadge">
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
-      <span id="starCount">0</span>
+    <div class="topbar-right">
+      <button type="button" class="help-btn" id="openHelp" aria-label="つかいかた">？</button>
+      <div class="star-badge" id="starBadge">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
+        <span id="starCount">0</span>
+      </div>
     </div>
   </header>
 
@@ -509,6 +526,52 @@
         <button type="button" class="legend-icon-btn" id="historyModalClose" aria-label="とじる">×</button>
       </div>
       <div class="history-list" id="historyList"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="helpModalBackdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+      <div class="modal-head">
+        <span id="helpModalTitle">つかいかた</span>
+        <button type="button" class="legend-icon-btn" id="helpModalClose" aria-label="とじる">×</button>
+      </div>
+      <div class="help-list">
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 12V3A9 9 0 0 1 19.5 16.5Z" fill="currentColor"/></svg>
+          <div class="help-body">
+            <h3>きょう</h3>
+            <p>がっこう・すいみんなどの じかんをダイヤルで あわせると、きょう じゆうに つかえる じかんが わかるよ。まるい グラフと リストで みれるよ。</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          <div class="help-body">
+            <h3>そのひ</h3>
+            <p>きょうだけの よていを ついかするよ。よく つかう ものは タップするだけ。じかんは ダイヤルで えらぶよ。</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7a8 8 0 0 1 14-4.5M20 2v5h-5"/><path d="M20 17a8 8 0 0 1-14 4.5M4 22v-5h5"/></svg>
+          <div class="help-body">
+            <h3>いつも</h3>
+            <p>まいしゅう きまって やることを とうろくすると、その曜日に じどうで 「きょう」に でてくるよ。じかんは その日ごとに きめてね。</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
+          <div class="help-body">
+            <h3>あそび</h3>
+            <p>あいてる じかんで できる あそびを みつけよう。「やってみる」を おすと、きょうの よていに ついかされるよ。</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
+          <div class="help-body">
+            <h3>⭐ スター</h3>
+            <p>よていを おわらせたり、あそびを やったりすると ⭐が もらえるよ。「きろくを みる」で、きのうまでの ことも ふりかえれるよ。</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1441,6 +1504,27 @@
   });
   document.addEventListener("keydown", function(ev){
     if(ev.key === "Escape" && !historyModalBackdrop.hidden) closeHistoryModal();
+  });
+
+  // ---- usage guide ("？") ----------------------------------------------------
+
+  var helpModalBackdrop = document.getElementById("helpModalBackdrop");
+  var helpOpenerEl = null;
+  function openHelpModal(){ helpModalBackdrop.hidden = false; }
+  function closeHelpModal(){
+    helpModalBackdrop.hidden = true;
+    if(helpOpenerEl){ helpOpenerEl.focus(); helpOpenerEl = null; }
+  }
+  document.getElementById("openHelp").addEventListener("click", function(){
+    helpOpenerEl = this;
+    openHelpModal();
+  });
+  document.getElementById("helpModalClose").addEventListener("click", closeHelpModal);
+  helpModalBackdrop.addEventListener("click", function(ev){
+    if(ev.target === helpModalBackdrop) closeHelpModal();
+  });
+  document.addEventListener("keydown", function(ev){
+    if(ev.key === "Escape" && !helpModalBackdrop.hidden) closeHelpModal();
   });
 
   // ---- routine registration ("いつも" タブ) ----------------------------------
