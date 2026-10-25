@@ -663,8 +663,6 @@
   function todayStr(){
     return formatDateStr(new Date());
   }
-  function todayWeekday(){ return new Date().getDay(); }
-
   var ACTIVITIES = [
     {id:"jump",   name:"なわとび",            need:15, icon:"loop"},
     {id:"read",   name:"ほんを よむ",          need:15, icon:"book"},
@@ -732,6 +730,11 @@
         return r && typeof r === "object" && typeof r.id === "string" && typeof r.name === "string" && Array.isArray(r.weekdays);
       }).map(function(r){
         return { id:r.id, name:r.name, weekdays:r.weekdays.filter(function(w){ return typeof w === "number" && w>=0 && w<=6; }) };
+      }).filter(function(r){
+        // a routine whose weekdays filtered down to empty can never be scheduled on any day
+        // (buildTasksForWeekday() matches by weekday membership), so drop it entirely instead
+        // of keeping a permanently "dead" routine with no explanation in the UI.
+        return r.weekdays.length > 0;
       });
       if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
       FIXED_BLOCKS.forEach(function(b){
@@ -1700,7 +1703,15 @@
   }
   function closeHistoryModal(){
     historyModalBackdrop.hidden = true;
-    if(historyOpenerEl && document.body.contains(historyOpenerEl) && historyOpenerEl.offsetParent !== null){ historyOpenerEl.focus(); }
+    if(historyOpenerEl && document.body.contains(historyOpenerEl) && historyOpenerEl.offsetParent !== null){
+      historyOpenerEl.focus();
+    } else {
+      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
+      // a conventional, always-visible focus target instead of letting focus fall through
+      // to <body>.
+      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
+      if(todayTabBtn) todayTabBtn.focus();
+    }
     historyOpenerEl = null;
   }
   document.getElementById("openHistory").addEventListener("click", function(){
@@ -1722,7 +1733,15 @@
   }
   function closeHelpModal(){
     helpModalBackdrop.hidden = true;
-    if(helpOpenerEl && document.body.contains(helpOpenerEl) && helpOpenerEl.offsetParent !== null){ helpOpenerEl.focus(); }
+    if(helpOpenerEl && document.body.contains(helpOpenerEl) && helpOpenerEl.offsetParent !== null){
+      helpOpenerEl.focus();
+    } else {
+      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
+      // a conventional, always-visible focus target instead of letting focus fall through
+      // to <body>.
+      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
+      if(todayTabBtn) todayTabBtn.focus();
+    }
     helpOpenerEl = null;
   }
   document.getElementById("openHelp").addEventListener("click", function(){
