@@ -611,6 +611,11 @@
     if(typeof opts.max === "number" && v > opts.max) return fallback;
     return v;
   }
+  // Minutes-specific validity rule (strictly > 0, unlike sanitizeNumber's inclusive min/max),
+  // shared by loadState()'s day-task and history-task sanitizers so both stay in lockstep.
+  function sanitizeTaskMinutes(v){
+    return (typeof v === "number" && isFinite(v) && v > 0 && v <= DAY_MINUTES) ? v : null;
+  }
   function findTaskById(id){
     return state.day.tasks.find(function(x){ return x.id === id; });
   }
@@ -798,7 +803,7 @@
           // never be kept.
           weekday: new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
-            var hMinutes = (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null;
+            var hMinutes = sanitizeTaskMinutes(t.minutes);
             return { name:t.name.slice(0, 20), minutes:hMinutes, completed:(hMinutes != null) ? !!t.completed : false };
           }),
           starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0, {integer: true}))
@@ -811,7 +816,7 @@
         parsed.day.tasks = parsed.day.tasks.filter(function(t){
           return t && typeof t === "object" && typeof t.id === "string" && typeof t.name === "string";
         }).map(function(t){
-          var dMinutes = (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null;
+          var dMinutes = sanitizeTaskMinutes(t.minutes);
           return {
             id: t.id, name: t.name.slice(0, 20),
             minutes: dMinutes,
@@ -863,10 +868,10 @@
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ showToast("ほぞんできなかったよ"); }
   }
 
+  var toastHandle = null;
   var state = loadState();
   var activeLegendId = null;
   var tickHandle = null;
-  var toastHandle = null;
 
   function ensureToday(){
     var now = new Date();
