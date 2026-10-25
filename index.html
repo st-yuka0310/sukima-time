@@ -48,6 +48,7 @@
       --accent-soft: #1d3250;
       --warning: #e7ab3a;
       --warning-soft: #352a12;
+      --good: #30d158;
       --weekday-sun: #e2695c;
       --remaining: #74726a;
       --fixed-sleep: #35342f;
@@ -78,6 +79,7 @@
     --accent-soft: #1d3250;
     --warning: #e7ab3a;
     --warning-soft: #352a12;
+    --good: #30d158;
     --weekday-sun: #e2695c;
     --remaining: #74726a;
     --fixed-sleep: #35342f;
@@ -736,7 +738,7 @@
           date: h.date,
           weekday: (typeof h.weekday === "number" && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
-            return { name:t.name, minutes:(typeof t.minutes==="number")?t.minutes:null, completed:!!t.completed };
+            return { name:t.name, minutes:(typeof t.minutes === "number" && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
           }),
           starsEarnedToday: (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0
         };
@@ -1068,6 +1070,7 @@
   }
 
   function tick(){
+    ensureToday();
     if(!state.timer){ stopTicking(); return; }
     var r = runningRemaining();
     if(!r){ state.timer = null; saveState(); stopTicking(); render(); return; }
