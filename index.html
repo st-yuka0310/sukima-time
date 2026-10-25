@@ -1244,7 +1244,12 @@
     var grid = document.getElementById("suggestGrid");
     var emptyState = document.getElementById("suggestEmpty");
     grid.innerHTML = "";
-    var fitting = ACTIVITIES.filter(function(a){ return a.need <= remaining && !isOver; })
+    function playDoneCountToday(a){
+      return tasks.filter(function(t){ return t.origin === "play" && t.name === a.name && t.completed; }).length;
+    }
+    // keep an activity visible once it's been done today, even if doing it used up the
+    // free time it needed — otherwise its "done" badge would vanish the instant it's earned.
+    var fitting = ACTIVITIES.filter(function(a){ return (a.need <= remaining && !isOver) || playDoneCountToday(a) > 0; })
       .sort(function(a,b){ return b.need - a.need; });
 
     if(fitting.length === 0){
@@ -1265,7 +1270,7 @@
         card.className = "suggest-card";
         // "やってみる" folds the activity straight into today's schedule as a done task,
         // so it shows up in the chart/legend and actually spends some of the free-time budget.
-        var count = tasks.filter(function(t){ return t.origin === "play" && t.name === a.name && t.completed; }).length;
+        var count = playDoneCountToday(a);
         card.classList.toggle("is-selected", count > 0);
         card.innerHTML =
           icon(a.icon, "suggest-icon", "--accent") +
