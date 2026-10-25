@@ -1070,7 +1070,8 @@
   }
 
   function tick(){
-    ensureToday();
+    var rolled = ensureToday();
+    if(rolled){ stopTicking(); render(); return; }
     if(!state.timer){ stopTicking(); return; }
     var r = runningRemaining();
     if(!r){ state.timer = null; saveState(); stopTicking(); render(); return; }
