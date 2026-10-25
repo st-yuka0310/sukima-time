@@ -593,6 +593,9 @@
   ];
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+  function findRunningTask(){
+    return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
+  }
 
   function weekdayColorVar(i){
     if(i === 0) return "var(--weekday-sun)";
@@ -690,7 +693,7 @@
       }).map(function(h){
         return {
           date: h.date,
-          weekday: (typeof h.weekday === "number") ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
+          weekday: (typeof h.weekday === "number" && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
             return { name:t.name, minutes:(typeof t.minutes==="number")?t.minutes:null, completed:!!t.completed };
           }),
@@ -706,7 +709,7 @@
         }).map(function(t){
           return {
             id: t.id, name: t.name,
-            minutes: (typeof t.minutes === "number") ? t.minutes : null,
+            minutes: (typeof t.minutes === "number") ? Math.max(0, t.minutes) : null,
             completed: !!t.completed,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
             routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
@@ -722,12 +725,20 @@
       if(parsed.day && (typeof parsed.day.weekday !== "number" || isNaN(parsed.day.weekday) || parsed.day.weekday < 0 || parsed.day.weekday > 6)){
         parsed.day.weekday = todayWeekday();
       }
+      // drop a corrupted timer (bad taskId/startedAt) so a stuck NaN:NaN countdown can never
+      // happen; day.tasks has already been sanitized above, so this existence check is reliable.
+      if(parsed.timer){
+        var timerTaskExists = Array.isArray(parsed.day && parsed.day.tasks) && parsed.day.tasks.some(function(t){ return t.id === parsed.timer.taskId; });
+        if(typeof parsed.timer.taskId !== "string" || typeof parsed.timer.startedAt !== "number" || !isFinite(parsed.timer.startedAt) || !timerTaskExists){
+          parsed.timer = null;
+        }
+      }
       return parsed;
     }catch(e){ return fallback; }
   }
 
   function saveState(){
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ /* ignore */ }
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ showToast("ほぞんできなかったよ"); }
   }
 
   var state = loadState();
@@ -917,7 +928,7 @@
       value = valueFromClientPoint(ev.clientX, ev.clientY);
       renderVisual();
     }
-    function pointerUp(ev){
+    function handleDragEnd(ev){
       if(!dragging || ev.pointerId !== activePointerId) return;
       dragging = false;
       activePointerId = null;
@@ -925,16 +936,17 @@
     }
     svg.addEventListener("pointerdown", pointerDown);
     svg.addEventListener("pointermove", pointerMove);
-    svg.addEventListener("pointerup", pointerUp);
-    svg.addEventListener("pointercancel", pointerUp);
+    svg.addEventListener("pointerup", handleDragEnd);
+    svg.addEventListener("pointercancel", handleDragEnd);
     // safety net: if pointer capture is ever lost without a pointerup/pointercancel reaching
     // us (dropped event, OS-level interruption, etc.), make sure the dial doesn't get stuck.
-    svg.addEventListener("lostpointercapture", function(ev){
-      if(!dragging || ev.pointerId !== activePointerId) return;
-      dragging = false;
-      activePointerId = null;
-      commit(value);
-    });
+    svg.addEventListener("lostpointercapture", handleDragEnd);
+    // extra safety net: if setPointerCapture silently failed/no-opped for this element and
+    // the pointer left the svg's bounds before release, svg-scoped listeners above never
+    // fire; these window-level fallbacks still catch the release (handleDragEnd's own
+    // pointerId/dragging guard keeps this safe to attach broadly, no double-firing).
+    window.addEventListener("pointerup", handleDragEnd);
+    window.addEventListener("pointercancel", handleDragEnd);
 
     // tap-only fine adjustment, no keyboard: nudges by the same step the dial snaps to
     nudgeDown.addEventListener("click", function(){ commit(value - step); });
@@ -944,7 +956,8 @@
     return {
       get: function(){ return value; },
       set: function(v){ value = clamp(v, min, max); renderVisual(); },
-      onChange: function(cb){ onChangeCb = cb; }
+      onChange: function(cb){ onChangeCb = cb; },
+      isDragging: function(){ return dragging; }
     };
   }
 
@@ -974,7 +987,7 @@
   }
 
   function completeRunningTimer(){
-    var t = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
+    var t = findRunningTask();
     state.timer = null;
     if(t){
       t.completed = true;
@@ -990,7 +1003,7 @@
 
   function runningRemaining(){
     if(!state.timer) return null;
-    var t = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
+    var t = findRunningTask();
     if(!t || t.minutes == null) return null;
     var plannedSec = t.minutes * 60;
     var elapsedSec = Math.floor((Date.now() - state.timer.startedAt) / 1000);
@@ -1036,7 +1049,7 @@
     var overflow = Math.max(0, tasksSum - freeTotal);
     var remaining = Math.max(0, freeTotal - tasksSum);
     var isOver = overflow > 0;
-    var runningTask = state.timer ? tasks.find(function(t){ return t.id === state.timer.taskId; }) : null;
+    var runningTask = findRunningTask() || null;
     var running = runningRemaining();
 
     document.getElementById("starCount").textContent = state.stars;
@@ -1046,7 +1059,7 @@
     wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
     wdLabelEl.style.color = weekdayColorVar(wd);
 
-    FIXED_BLOCKS.forEach(function(b){ if(fixedDials[b.key].get() !== state.fixed[b.key]) fixedDials[b.key].set(state.fixed[b.key]); });
+    FIXED_BLOCKS.forEach(function(b){ if(!fixedDials[b.key].isDragging() && fixedDials[b.key].get() !== state.fixed[b.key]) fixedDials[b.key].set(state.fixed[b.key]); });
     document.getElementById("fixedTotal").textContent = formatMinutes(fixedSum);
 
     var remainingLabelEl = document.getElementById("remainingLabel");
@@ -1315,7 +1328,7 @@
         state.routines = state.routines.filter(function(x){ return x.id !== r.id; });
         state.day.tasks = state.day.tasks.filter(function(x){ return x.routineId !== r.id; });
         if(state.timer){
-          var running = state.day.tasks.find(function(x){ return x.id === state.timer.taskId; });
+          var running = findRunningTask();
           if(!running) state.timer = null;
         }
         saveState(); render();
