@@ -1187,6 +1187,15 @@
         hint.className = "legend-time";
         hint.textContent = "なんぷん？";
         head.appendChild(hint);
+        var delPending = document.createElement("button");
+        delPending.className = "legend-icon-btn";
+        delPending.setAttribute("aria-label", t.name + " を けす");
+        delPending.textContent = "×";
+        delPending.addEventListener("click", function(){
+          state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== t.id; });
+          saveState(); render();
+        });
+        head.appendChild(delPending);
         li.appendChild(head);
         var chipsWrap = document.createElement("div");
         chipsWrap.className = "legend-pending-chips";
@@ -1326,7 +1335,7 @@
       del.textContent = "×";
       del.addEventListener("click", function(){
         state.routines = state.routines.filter(function(x){ return x.id !== r.id; });
-        state.day.tasks = state.day.tasks.filter(function(x){ return x.routineId !== r.id; });
+        state.day.tasks = state.day.tasks.filter(function(x){ return x.routineId !== r.id || x.completed; });
         if(state.timer){
           var running = findRunningTask();
           if(!running) state.timer = null;
