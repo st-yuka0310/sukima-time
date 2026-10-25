@@ -599,6 +599,12 @@
   function findRunningTask(){
     return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
   }
+  function makeLegendTimeSpan(text){
+    var span = document.createElement("span");
+    span.className = "legend-time";
+    span.textContent = text;
+    return span;
+  }
   function deleteTask(id){
     if(state.timer && state.timer.taskId === id){
       state.timer = null;
@@ -775,7 +781,7 @@
       // happen; day.tasks has already been sanitized above, so this existence check is reliable.
       if(parsed.timer){
         var matchedTask = Array.isArray(parsed.day && parsed.day.tasks) ? parsed.day.tasks.filter(function(t){ return t.id === parsed.timer.taskId; })[0] : undefined;
-        if(typeof parsed.timer.taskId !== "string" || typeof parsed.timer.startedAt !== "number" || !isFinite(parsed.timer.startedAt) || !matchedTask || matchedTask.completed){
+        if(typeof parsed.timer.taskId !== "string" || typeof parsed.timer.startedAt !== "number" || !isFinite(parsed.timer.startedAt) || !matchedTask || matchedTask.completed || matchedTask.minutes == null){
           parsed.timer = null;
         }
       }
@@ -920,6 +926,7 @@
 
     tickValues.forEach(function(tv){
       var v = (tv && typeof tv === "object") ? tv.value : tv;
+      if(v === max && min !== max) return; // avoid drawing on top of the min tick at angle 0/360
       var label = (tv && typeof tv === "object") ? tv.label : tickFormat(v);
       var ang = ((v-min)/(max-min))*360;
       var p = polar(cx, cy, rTrack+16, ang);
@@ -1021,6 +1028,7 @@
   }
 
   function startTimer(taskId){
+    ensureToday();
     if(state.timer) return;
     state.timer = {taskId: taskId, startedAt: Date.now()};
     saveState();
@@ -1259,19 +1267,15 @@
       li.appendChild(dot); li.appendChild(name);
 
       if(t.completed){
-        var time1 = document.createElement("span");
-        time1.className = "legend-time";
-        time1.textContent = formatMinutes(t.minutes);
+        var time1 = makeLegendTimeSpan(formatMinutes(t.minutes));
         var check = document.createElement("svg");
         check.className = "legend-check";
         check.setAttribute("viewBox","0 0 24 24");
         check.innerHTML = '<circle cx="12" cy="12" r="11" fill="none" stroke="var(--good)" stroke-width="2"/><path d="M7 12.5l3.2 3.5L17 9" fill="none" stroke="var(--good)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
         li.appendChild(time1); li.appendChild(check);
       } else if(isRunning){
-        var time2 = document.createElement("span");
-        time2.className = "legend-time";
+        var time2 = makeLegendTimeSpan(formatClock(running ? running.remainingSec : 0));
         time2.id = "legendCountdown";
-        time2.textContent = formatClock(running ? running.remainingSec : 0);
         var stop = document.createElement("button");
         stop.className = "legend-icon-btn is-stop";
         stop.setAttribute("aria-label", t.name + " の たいまーを やめる");
@@ -1279,9 +1283,7 @@
         stop.addEventListener("click", function(){ cancelTimer(); });
         li.appendChild(time2); li.appendChild(stop);
       } else {
-        var time3 = document.createElement("span");
-        time3.className = "legend-time";
-        time3.textContent = formatMinutes(t.minutes);
+        var time3 = makeLegendTimeSpan(formatMinutes(t.minutes));
         li.appendChild(time3);
         // another task's timer is running: offering a second ▶ here would silently
         // overwrite it (only one timer may run at a time), so just hide the control.
@@ -1375,7 +1377,10 @@
         state.day.tasks = state.day.tasks.filter(function(x){ return x.routineId !== r.id || x.completed; });
         if(state.timer){
           var running = findRunningTask();
-          if(!running) state.timer = null;
+          if(!running){
+            state.timer = null;
+            stopTicking();
+          }
         }
         saveState(); render();
       });
