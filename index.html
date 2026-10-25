@@ -230,7 +230,6 @@
   .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
-  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
   .chip{
     border:1px solid var(--border); background:var(--bg); color:var(--ink);
     font: inherit; font-weight:700; font-size:.82rem; padding:8px 14px; border-radius:999px; cursor:pointer;
@@ -709,7 +708,7 @@
         }).map(function(t){
           return {
             id: t.id, name: t.name,
-            minutes: (typeof t.minutes === "number") ? Math.max(0, t.minutes) : null,
+            minutes: (typeof t.minutes === "number" && t.minutes > 0) ? t.minutes : null,
             completed: !!t.completed,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
             routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
@@ -1114,6 +1113,8 @@
           base.setAttribute("d", arcPath(120,120,100,66,gStart,gEnd));
           base.setAttribute("fill", s.color);
           base.style.opacity = "0.22";
+          base.style.cursor = "pointer";
+          base.addEventListener("click", function(){ setActive(s.key); });
           svg.appendChild(base);
 
           var overlay = document.createElementNS(svgNS,"path");
@@ -1123,6 +1124,8 @@
           var frac = running ? running.remainingSec/running.plannedSec : 0;
           overlay.setAttribute("d", arcPath(120,120,100,66,gStart, gStart+(gEnd-gStart)*frac));
           overlay.setAttribute("fill", s.color);
+          overlay.style.cursor = "pointer";
+          overlay.addEventListener("click", function(){ setActive(s.key); });
           svg.appendChild(overlay);
         } else {
           var path = document.createElementNS(svgNS,"path");
