@@ -740,7 +740,7 @@
       parsed.routines = parsed.routines.filter(function(r){
         return r && typeof r === "object" && typeof r.id === "string" && typeof r.name === "string" && Array.isArray(r.weekdays);
       }).map(function(r){
-        return { id:r.id, name:r.name, weekdays:r.weekdays.filter(function(w){ return typeof w === "number" && w>=0 && w<=6; }) };
+        return { id:r.id, name:r.name, weekdays:r.weekdays.filter(function(w){ return typeof w === "number" && Number.isInteger(w) && w>=0 && w<=6; }) };
       }).filter(function(r){
         // a routine whose weekdays filtered down to empty can never be scheduled on any day
         // (buildTasksForWeekday() matches by weekday membership), so drop it entirely instead
@@ -755,6 +755,7 @@
         parsed.fixed[b.key] = clamp(snapToStep(parsed.fixed[b.key], b.min, FIXED_DIAL_STEP), b.min, b.max);
       });
       if(typeof parsed.stars !== "number") parsed.stars = 0;
+      parsed.stars = Math.max(0, parsed.stars);
       if(!Array.isArray(parsed.history)) parsed.history = [];
       // drop/repair any history entry whose shape is malformed, so a single corrupted stored
       // entry can never crash openHistoryModal() (entry.tasks.forEach, formatHistoryDate, etc.).
@@ -763,11 +764,11 @@
       }).map(function(h){
         return {
           date: h.date,
-          weekday: (typeof h.weekday === "number" && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
+          weekday: (typeof h.weekday === "number" && Number.isInteger(h.weekday) && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
             return { name:t.name, minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
           }),
-          starsEarnedToday: (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0
+          starsEarnedToday: Math.max(0, (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0)
         };
       }).slice(0, HISTORY_LIMIT);
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
@@ -788,6 +789,7 @@
         });
       }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
+      if(parsed.day) parsed.day.starsEarnedToday = Math.max(0, parsed.day.starsEarnedToday);
       if(parsed.day && !isValidDateStr(parsed.day.date)){
         // an invalid stored date means this whole day object is untrustworthy — rebuild it
         // fresh (same shape ensureToday() builds for a freshly-rolled-over day) instead of
