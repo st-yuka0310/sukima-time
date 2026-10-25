@@ -766,7 +766,7 @@
       parsed.routines = parsed.routines.filter(function(r){
         return r && typeof r === "object" && typeof r.id === "string" && typeof r.name === "string" && Array.isArray(r.weekdays);
       }).map(function(r){
-        return { id:r.id, name:r.name, weekdays:r.weekdays.filter(function(w){ return typeof w === "number" && Number.isInteger(w) && w>=0 && w<=6; }) };
+        return { id:r.id, name:r.name.slice(0, 20), weekdays:r.weekdays.filter(function(w){ return typeof w === "number" && Number.isInteger(w) && w>=0 && w<=6; }) };
       }).filter(function(r){
         // a routine whose weekdays filtered down to empty can never be scheduled on any day
         // (buildTasksForWeekday() matches by weekday membership), so drop it entirely instead
@@ -792,7 +792,7 @@
           date: h.date,
           weekday: (typeof h.weekday === "number" && Number.isInteger(h.weekday) && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
-            return { name:t.name, minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
+            return { name:t.name.slice(0, 20), minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
           }),
           starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0, {integer: true}))
         };
@@ -805,7 +805,7 @@
           return t && typeof t === "object" && typeof t.id === "string" && typeof t.name === "string";
         }).map(function(t){
           return {
-            id: t.id, name: t.name,
+            id: t.id, name: t.name.slice(0, 20),
             minutes: (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null,
             completed: !!t.completed,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
@@ -1609,7 +1609,7 @@
     ev.preventDefault();
     ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
     var nameInput = document.getElementById("taskName");
-    var name = nameInput.value.trim();
+    var name = nameInput.value.trim().slice(0, 20);
     var errorEl = document.getElementById("formError");
     if(!name){ errorEl.textContent = "なにを するか かいてね"; return; }
     if(!taskDial.get()){ errorEl.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
@@ -1806,7 +1806,7 @@
     ev.preventDefault();
     ensureToday(); // resolve any pending day rollover before touching state.routines/state.day.tasks below
     var nameInput = document.getElementById("routineName");
-    var name = nameInput.value.trim();
+    var name = nameInput.value.trim().slice(0, 20);
     var errorEl = document.getElementById("routineError");
     var days = [];
     routineWeekdaySelected.forEach(function(v,i){ if(v) days.push(i); });
