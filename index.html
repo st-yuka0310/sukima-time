@@ -1030,6 +1030,8 @@
   function startTimer(taskId){
     ensureToday();
     if(state.timer) return;
+    var task = state.day.tasks.find(function(x){ return x.id === taskId; });
+    if(!task) return;
     state.timer = {taskId: taskId, startedAt: Date.now()};
     saveState();
     ensureTicking();
@@ -1252,7 +1254,10 @@
           chip.className = "chip chip-sm";
           chip.textContent = formatMinutes(m);
           chip.addEventListener("click", function(){
-            t.minutes = m;
+            ensureToday();
+            var current = state.day.tasks.find(function(x){ return x.id === t.id; });
+            if(!current) return;
+            current.minutes = m;
             saveState(); render();
           });
           chipsWrap.appendChild(chip);
