@@ -752,7 +752,22 @@
         });
       }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
-      if(parsed.day && !isValidDateStr(parsed.day.date)) parsed.day.date = todayStr();
+      if(parsed.day && !isValidDateStr(parsed.day.date)){
+        // an invalid stored date means this whole day object is untrustworthy — rebuild it
+        // fresh (same shape ensureToday() builds for a freshly-rolled-over day) instead of
+        // just patching date/weekday while the old (possibly corrupted) tasks silently
+        // survive, mislabeled as belonging to the freshly-assigned "today".
+        var freshDate = todayStr();
+        var freshWeekday = new Date(freshDate + "T00:00:00").getDay();
+        parsed.day = {
+          date: freshDate,
+          weekday: freshWeekday,
+          tasks: parsed.routines.filter(function(r){ return r.weekdays.indexOf(freshWeekday) !== -1; }).map(function(r){
+            return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
+          }),
+          starsEarnedToday: 0
+        };
+      }
       // weekday is always derived fresh from the (already-corrected) date, so a repaired date
       // can never be paired with a stale/mismatched stored weekday.
       if(parsed.day) parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
@@ -1050,12 +1065,10 @@
   }
 
   function updateRunningDisplays(t, remainingSec, plannedSec){
-    var labelEl = document.getElementById("remainingLabel");
-    var valueEl = document.getElementById("remainingValue");
-    labelEl.textContent = t.name;
-    valueEl.textContent = formatClock(remainingSec);
-    valueEl.classList.add("is-live");
-    valueEl.classList.remove("is-over");
+    remainingLabelEl.textContent = t.name;
+    remainingValueEl.textContent = formatClock(remainingSec);
+    remainingValueEl.classList.add("is-live");
+    remainingValueEl.classList.remove("is-over");
     var countdownEl = document.getElementById("legendCountdown");
     if(countdownEl) countdownEl.textContent = formatClock(remainingSec);
     var overlay = document.getElementById("timerOverlayPath");
@@ -1746,7 +1759,7 @@
   });
 
   if(state.timer) ensureTicking();
-  setInterval(function(){ var rolled = ensureToday(); if(rolled && !state.timer) render(); }, 60000);
+  setInterval(function(){ var rolled = ensureToday(); if(rolled) render(); }, 60000);
   render();
 })();
 </script>
