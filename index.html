@@ -607,9 +607,6 @@
       if(typeof parsed.stars !== "number") parsed.stars = 0;
       if(!Array.isArray(parsed.history)) parsed.history = [];
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
-      if(parsed.day && (!parsed.day.doneActivityCounts || typeof parsed.day.doneActivityCounts !== "object" || Array.isArray(parsed.day.doneActivityCounts))){
-        parsed.day.doneActivityCounts = {};
-      }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
       if(parsed.day && typeof parsed.day.weekday !== "number"){
         parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
@@ -643,7 +640,7 @@
     var tasks = state.routines.filter(function(r){ return r.weekdays.indexOf(wd) !== -1; }).map(function(r){
       return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
     });
-    state.day = {date: ts, weekday: wd, tasks: tasks, doneActivityCounts: {}, starsEarnedToday: 0};
+    state.day = {date: ts, weekday: wd, tasks: tasks, starsEarnedToday: 0};
     state.timer = null;
     saveState();
   }
@@ -1203,17 +1200,19 @@
       fitting.forEach(function(a){
         var card = document.createElement("div");
         card.className = "suggest-card";
-        var count = state.day.doneActivityCounts[a.id] || 0;
+        // "やってみる" folds the activity straight into today's schedule as a done task,
+        // so it shows up in the chart/legend and actually spends some of the free-time budget.
+        var count = tasks.filter(function(t){ return t.origin === "play" && t.name === a.name && t.completed; }).length;
         card.classList.toggle("is-selected", count > 0);
         card.innerHTML =
           icon(a.icon, "suggest-icon", "--accent") +
           '<div class="suggest-name"></div>' +
           '<div class="suggest-need">' + formatMinutes(a.need) + ' あれば できる</div>' +
           (count > 0 ? '<div class="suggest-count">きょう ' + count + 'かい やったよ ⭐</div>' : '') +
-          '<button type="button" class="suggest-pick">やったよ！</button>';
+          '<button type="button" class="suggest-pick">やってみる</button>';
         card.querySelector(".suggest-name").textContent = a.name;
         card.querySelector(".suggest-pick").addEventListener("click", function(){
-          state.day.doneActivityCounts[a.id] = (state.day.doneActivityCounts[a.id] || 0) + 1;
+          state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play" });
           state.stars += 1;
           state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
           popStarBadge();
