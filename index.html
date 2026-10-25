@@ -625,6 +625,17 @@
     saveState();
     render();
   }
+  function restoreFocusOrFallback(opener){
+    if(opener && document.body.contains(opener) && opener.offsetParent !== null){
+      opener.focus();
+    } else {
+      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
+      // a conventional, always-visible focus target instead of letting focus fall through
+      // to <body>.
+      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
+      if(todayTabBtn) todayTabBtn.focus();
+    }
+  }
   function buildWarningBanner(messageHtml){
     return '<div class="warning-banner">' +
       '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
@@ -1609,15 +1620,7 @@
     modalPendingName = null;
     presetModalDial.set(0);
     presetModalError.textContent = "";
-    if(modalOpenerEl && document.body.contains(modalOpenerEl) && modalOpenerEl.offsetParent !== null){
-      modalOpenerEl.focus();
-    } else {
-      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
-      // a conventional, always-visible focus target instead of letting focus fall through
-      // to <body>.
-      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
-      if(todayTabBtn) todayTabBtn.focus();
-    }
+    restoreFocusOrFallback(modalOpenerEl);
     modalOpenerEl = null;
   }
 
@@ -1703,15 +1706,7 @@
   }
   function closeHistoryModal(){
     historyModalBackdrop.hidden = true;
-    if(historyOpenerEl && document.body.contains(historyOpenerEl) && historyOpenerEl.offsetParent !== null){
-      historyOpenerEl.focus();
-    } else {
-      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
-      // a conventional, always-visible focus target instead of letting focus fall through
-      // to <body>.
-      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
-      if(todayTabBtn) todayTabBtn.focus();
-    }
+    restoreFocusOrFallback(historyOpenerEl);
     historyOpenerEl = null;
   }
   document.getElementById("openHistory").addEventListener("click", function(){
@@ -1733,15 +1728,7 @@
   }
   function closeHelpModal(){
     helpModalBackdrop.hidden = true;
-    if(helpOpenerEl && document.body.contains(helpOpenerEl) && helpOpenerEl.offsetParent !== null){
-      helpOpenerEl.focus();
-    } else {
-      // opener is gone or hidden (e.g. a tab switch already hid its panel): fall back to
-      // a conventional, always-visible focus target instead of letting focus fall through
-      // to <body>.
-      var todayTabBtn = tabButtons.filter(function(btn){ return btn.dataset.tab === "today"; })[0];
-      if(todayTabBtn) todayTabBtn.focus();
-    }
+    restoreFocusOrFallback(helpOpenerEl);
     helpOpenerEl = null;
   }
   document.getElementById("openHelp").addEventListener("click", function(){
