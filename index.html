@@ -606,6 +606,12 @@
       '<span>' + messageHtml + '</span>' +
       '</div>';
   }
+  function awardStar(message){
+    state.stars += 1;
+    state.day.starsEarnedToday += 1;
+    popStarBadge();
+    showToast(message);
+  }
 
   function weekdayColorVar(i){
     if(i === 0) return "var(--weekday-sun)";
@@ -735,8 +741,8 @@
       // drop a corrupted timer (bad taskId/startedAt) so a stuck NaN:NaN countdown can never
       // happen; day.tasks has already been sanitized above, so this existence check is reliable.
       if(parsed.timer){
-        var timerTaskExists = Array.isArray(parsed.day && parsed.day.tasks) && parsed.day.tasks.some(function(t){ return t.id === parsed.timer.taskId; });
-        if(typeof parsed.timer.taskId !== "string" || typeof parsed.timer.startedAt !== "number" || !isFinite(parsed.timer.startedAt) || !timerTaskExists){
+        var matchedTask = Array.isArray(parsed.day && parsed.day.tasks) ? parsed.day.tasks.filter(function(t){ return t.id === parsed.timer.taskId; })[0] : undefined;
+        if(typeof parsed.timer.taskId !== "string" || typeof parsed.timer.startedAt !== "number" || !isFinite(parsed.timer.startedAt) || !matchedTask || matchedTask.completed){
           parsed.timer = null;
         }
       }
@@ -902,15 +908,20 @@
       nudgeUp.disabled = value >= max;
     }
 
+    function snapToStep(raw){
+      return Math.round((raw-min)/step)*step + min;
+    }
+
     function valueFromClientPoint(clientX, clientY){
       var rect = svg.getBoundingClientRect();
-      var scale = 160/rect.width;
-      var x = (clientX - rect.left)*scale - cx;
-      var y = (clientY - rect.top)*scale - cy;
-      var deg = Math.atan2(y, x)*180/Math.PI + 90;
+      var cxPix = rect.left + rect.width/2;
+      var cyPix = rect.top + rect.height/2;
+      var nx = (clientX - cxPix) / (rect.width/2);
+      var ny = (clientY - cyPix) / (rect.height/2);
+      var deg = Math.atan2(ny, nx)*180/Math.PI + 90;
       if(deg < 0) deg += 360;
       var raw = min + (deg/360)*(max-min);
-      var snapped = Math.round((raw-min)/step)*step + min;
+      var snapped = snapToStep(raw);
       return clamp(snapped, min, max);
     }
 
@@ -962,7 +973,7 @@
     renderVisual();
     return {
       get: function(){ return value; },
-      set: function(v){ value = clamp(v, min, max); renderVisual(); },
+      set: function(v){ value = clamp(snapToStep(v), min, max); renderVisual(); },
       onChange: function(cb){ onChangeCb = cb; },
       isDragging: function(){ return dragging; }
     };
@@ -998,10 +1009,7 @@
     state.timer = null;
     if(t){
       t.completed = true;
-      state.stars += 1;
-      state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
-      showToast(t.name + " できたね！ ⭐");
-      popStarBadge();
+      awardStar(t.name + " できたね！ ⭐");
     }
     saveState();
     stopTicking();
@@ -1117,10 +1125,12 @@
         var isRunning = s.task && runningTask && s.task.id === runningTask.id;
 
         if(isRunning){
+          var legendDim = (activeLegendId && activeLegendId !== s.key) ? 0.35 : 1;
+
           var base = document.createElementNS(svgNS,"path");
           base.setAttribute("d", arcPath(120,120,100,66,gStart,gEnd));
           base.setAttribute("fill", s.color);
-          base.style.opacity = "0.22";
+          base.style.opacity = String(0.22 * legendDim);
           base.style.cursor = "pointer";
           base.addEventListener("click", function(){ setActive(s.key); });
           svg.appendChild(base);
@@ -1132,6 +1142,7 @@
           var frac = running ? running.remainingSec/running.plannedSec : 0;
           overlay.setAttribute("d", arcPath(120,120,100,66,gStart, gStart+(gEnd-gStart)*frac));
           overlay.setAttribute("fill", s.color);
+          overlay.style.opacity = String(1 * legendDim);
           overlay.style.cursor = "pointer";
           overlay.addEventListener("click", function(){ setActive(s.key); });
           svg.appendChild(overlay);
@@ -1400,10 +1411,7 @@
         if(pickBtn){
           pickBtn.addEventListener("click", function(){
             state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play", activityId: a.id });
-            state.stars += 1;
-            state.day.starsEarnedToday = (state.day.starsEarnedToday || 0) + 1;
-            popStarBadge();
-            showToast(a.name + " やったね！ ⭐");
+            awardStar(a.name + " やったね！ ⭐");
             saveState(); render();
           });
         }
