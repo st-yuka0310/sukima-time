@@ -793,9 +793,13 @@
       }).map(function(h){
         return {
           date: h.date,
-          weekday: (typeof h.weekday === "number" && Number.isInteger(h.weekday) && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
+          // weekday is always re-derived from this entry's own (already-validated) date, the
+          // same way state.day.weekday is handled, so a stale/mismatched stored weekday can
+          // never be kept.
+          weekday: new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
-            return { name:t.name.slice(0, 20), minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null, completed:!!t.completed };
+            var hMinutes = (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null;
+            return { name:t.name.slice(0, 20), minutes:hMinutes, completed:(hMinutes != null) ? !!t.completed : false };
           }),
           starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0, {integer: true}))
         };
@@ -807,10 +811,11 @@
         parsed.day.tasks = parsed.day.tasks.filter(function(t){
           return t && typeof t === "object" && typeof t.id === "string" && typeof t.name === "string";
         }).map(function(t){
+          var dMinutes = (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null;
           return {
             id: t.id, name: t.name.slice(0, 20),
-            minutes: (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null,
-            completed: !!t.completed,
+            minutes: dMinutes,
+            completed: (dMinutes != null) ? !!t.completed : false,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
             routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
             activityId: (typeof t.activityId === "string") ? t.activityId : undefined
@@ -845,7 +850,13 @@
         }
       }
       return parsed;
-    }catch(e){ return fallback; }
+    }catch(e){
+      // the toast element (#toast) is parsed into the DOM before this script tag runs, and
+      // showToast() is a hoisted function declaration, so calling it here directly is safe —
+      // no need to defer via setTimeout.
+      showToast("きろくが きえちゃったよ");
+      return fallback;
+    }
   }
 
   function saveState(){
@@ -1317,7 +1328,7 @@
           chip.addEventListener("click", function(){
             ensureToday();
             var current = findTaskById(t.id);
-            if(!current) return;
+            if(!current){ render(); return; }
             current.minutes = m;
             saveState(); render();
           });
@@ -1500,6 +1511,8 @@
         var pickBtn = card.querySelector(".suggest-pick");
         if(pickBtn){
           pickBtn.addEventListener("click", function(){
+            if(pickBtn.disabled) return;
+            pickBtn.disabled = true;
             ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
             state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play", activityId: a.id });
             awardStar(a.name + " やったね！ ⭐");
