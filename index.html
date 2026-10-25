@@ -588,7 +588,7 @@
     {key:"other",  name:"ごはん・おふろ など", min:0,   max:240, colorVar:"--fixed-other",
       ticks:[{value:0,label:"0"},{value:60,label:"1"},{value:120,label:"2"},{value:180,label:"3"}]},
     {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep",
-      ticks:[{value:300,label:"5"},{value:420,label:"7"},{value:540,label:"9"},{value:660,label:"11"}]}
+      ticks:[{value:300,label:"5"},{value:420,label:"7"},{value:540,label:"9"}]}
   ];
   var FIXED_DIAL_STEP = 15; // matches the step passed to buildDial() for every fixed-block dial below
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
@@ -1592,7 +1592,8 @@
     modalPendingName = null;
     presetModalDial.set(0);
     presetModalError.textContent = "";
-    if(modalOpenerEl){ modalOpenerEl.focus(); modalOpenerEl = null; }
+    if(modalOpenerEl && document.body.contains(modalOpenerEl) && modalOpenerEl.offsetParent !== null){ modalOpenerEl.focus(); }
+    modalOpenerEl = null;
   }
 
   document.getElementById("presetModalClose").addEventListener("click", closePresetModal);
@@ -1673,7 +1674,8 @@
   }
   function closeHistoryModal(){
     historyModalBackdrop.hidden = true;
-    if(historyOpenerEl){ historyOpenerEl.focus(); historyOpenerEl = null; }
+    if(historyOpenerEl && document.body.contains(historyOpenerEl) && historyOpenerEl.offsetParent !== null){ historyOpenerEl.focus(); }
+    historyOpenerEl = null;
   }
   document.getElementById("openHistory").addEventListener("click", function(){
     historyOpenerEl = this;
@@ -1694,7 +1696,8 @@
   }
   function closeHelpModal(){
     helpModalBackdrop.hidden = true;
-    if(helpOpenerEl){ helpOpenerEl.focus(); helpOpenerEl = null; }
+    if(helpOpenerEl && document.body.contains(helpOpenerEl) && helpOpenerEl.offsetParent !== null){ helpOpenerEl.focus(); }
+    helpOpenerEl = null;
   }
   document.getElementById("openHelp").addEventListener("click", function(){
     helpOpenerEl = this;
