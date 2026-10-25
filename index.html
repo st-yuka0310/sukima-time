@@ -620,10 +620,10 @@
     span.textContent = text;
     return span;
   }
-  function makeDeleteButton(name, onClick, className){
+  function makeDeleteButton(name, onClick, className, labelSuffix){
     var btn = document.createElement("button");
     btn.className = className || "legend-icon-btn";
-    btn.setAttribute("aria-label", name + " を けす");
+    btn.setAttribute("aria-label", name + (labelSuffix || " を けす"));
     btn.textContent = "×";
     btn.addEventListener("click", onClick);
     return btn;
@@ -1426,7 +1426,7 @@
           }
         }
         saveState(); render();
-      }, "routine-del");
+      }, "routine-del", " を やめる");
       del.type = "button";
       row.appendChild(name); row.appendChild(days); row.appendChild(del);
       routineListEl.appendChild(row);
