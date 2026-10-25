@@ -590,8 +590,12 @@
     {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep",
       ticks:[{value:300,label:"5"},{value:420,label:"7"},{value:540,label:"9"},{value:660,label:"11"}]}
   ];
+  var FIXED_DIAL_STEP = 15; // matches the step passed to buildDial() for every fixed-block dial below
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+  // shared with buildDial()'s dial.set(), so a stored value snaps to the exact same grid
+  // the dial itself would produce for that same input.
+  function snapToStep(raw, min, step){ return Math.round((raw-min)/step)*step + min; }
   function findRunningTask(){
     return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
   }
@@ -625,6 +629,14 @@
 
   function formatDateStr(d){
     return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
+  }
+  // regex only checks shape ("2026-02-30" passes /^\d{4}-\d{2}-\d{2}$/ but isn't a real
+  // calendar date); this also confirms the string round-trips through Date unchanged.
+  function isValidDateStr(s){
+    if(typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    var parts = s.split("-").map(Number);
+    var d = new Date(s + "T00:00:00");
+    return d.getFullYear() === parts[0] && (d.getMonth()+1) === parts[1] && d.getDate() === parts[2];
   }
   function todayStr(){
     return formatDateStr(new Date());
@@ -702,14 +714,16 @@
       if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
       FIXED_BLOCKS.forEach(function(b){
         if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
-        parsed.fixed[b.key] = clamp(parsed.fixed[b.key], b.min, b.max);
+        // snap to the same step grid buildDial()'s dial.set() snaps to, then clamp — otherwise
+        // the dial's displayed (snapped) value could permanently disagree with this stored value.
+        parsed.fixed[b.key] = clamp(snapToStep(parsed.fixed[b.key], b.min, FIXED_DIAL_STEP), b.min, b.max);
       });
       if(typeof parsed.stars !== "number") parsed.stars = 0;
       if(!Array.isArray(parsed.history)) parsed.history = [];
       // drop/repair any history entry whose shape is malformed, so a single corrupted stored
       // entry can never crash openHistoryModal() (entry.tasks.forEach, formatHistoryDate, etc.).
       parsed.history = parsed.history.filter(function(h){
-        return h && typeof h === "object" && typeof h.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.date) && Array.isArray(h.tasks);
+        return h && typeof h === "object" && isValidDateStr(h.date) && Array.isArray(h.tasks);
       }).map(function(h){
         return {
           date: h.date,
@@ -738,7 +752,7 @@
         });
       }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
-      if(parsed.day && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.day.date)) parsed.day.date = todayStr();
+      if(parsed.day && !isValidDateStr(parsed.day.date)) parsed.day.date = todayStr();
       // weekday is always derived fresh from the (already-corrected) date, so a repaired date
       // can never be paired with a stale/mismatched stored weekday.
       if(parsed.day) parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
@@ -784,6 +798,7 @@
     state.timer = null;
     activeLegendId = null;
     saveState();
+    return true;
   }
   ensureToday();
 
@@ -913,10 +928,6 @@
       nudgeUp.disabled = value >= max;
     }
 
-    function snapToStep(raw){
-      return Math.round((raw-min)/step)*step + min;
-    }
-
     function valueFromClientPoint(clientX, clientY){
       var rect = svg.getBoundingClientRect();
       var cxPix = rect.left + rect.width/2;
@@ -926,7 +937,7 @@
       var deg = Math.atan2(ny, nx)*180/Math.PI + 90;
       if(deg < 0) deg += 360;
       var raw = min + (deg/360)*(max-min);
-      var snapped = snapToStep(raw);
+      var snapped = snapToStep(raw, min, step);
       return clamp(snapped, min, max);
     }
 
@@ -978,7 +989,7 @@
     renderVisual();
     return {
       get: function(){ return value; },
-      set: function(v){ value = clamp(snapToStep(v), min, max); renderVisual(); },
+      set: function(v){ value = clamp(snapToStep(v, min, step), min, max); renderVisual(); },
       onChange: function(cb){ onChangeCb = cb; },
       isDragging: function(){ return dragging; }
     };
@@ -1072,18 +1083,15 @@
     var runningTask = findRunningTask() || null;
     var running = runningRemaining();
 
-    document.getElementById("starCount").textContent = state.stars;
+    starCountEl.textContent = state.stars;
 
     var wd = todayWeekday();
-    var wdLabelEl = document.getElementById("todayWeekdayLabel");
     wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
     wdLabelEl.style.color = weekdayColorVar(wd);
 
     FIXED_BLOCKS.forEach(function(b){ if(!fixedDials[b.key].isDragging() && fixedDials[b.key].get() !== state.fixed[b.key]) fixedDials[b.key].set(state.fixed[b.key]); });
-    document.getElementById("fixedTotal").textContent = formatMinutes(fixedSum);
+    fixedTotalEl.textContent = formatMinutes(fixedSum);
 
-    var remainingLabelEl = document.getElementById("remainingLabel");
-    var remainingValueEl = document.getElementById("remainingValue");
     remainingValueEl.classList.remove("is-live");
     if(runningTask){
       remainingLabelEl.textContent = runningTask.name;
@@ -1113,7 +1121,7 @@
     }
 
     var svgNS = "http://www.w3.org/2000/svg";
-    var svg = document.getElementById("donut");
+    var svg = donutEl;
     svg.innerHTML = "";
     if(donutTotal <= 0){
       svg.innerHTML = '<circle cx="120" cy="120" r="100" fill="none" />';
@@ -1176,7 +1184,7 @@
     if(runningTask){ ensureTicking(); } else { stopTicking(); }
 
     // warning banner
-    var warnSlot = document.getElementById("warningSlot");
+    var warnSlot = warningSlotEl;
     warnSlot.innerHTML = "";
     if(fixedSum > DAY_MINUTES){
       // school+other+sleep alone already exceed the day: freeTotal silently clamps to 0,
@@ -1188,7 +1196,7 @@
     }
 
     // legend
-    var legend = document.getElementById("legend");
+    var legend = legendEl;
     legend.innerHTML = "";
     tasks.forEach(function(t, i){
       var li = document.createElement("li");
@@ -1304,7 +1312,7 @@
     }
 
     // table
-    var tbody = document.getElementById("tableBody");
+    var tbody = tableBodyEl;
     tbody.innerHTML = "";
     tasks.forEach(function(t){
       var tr = document.createElement("tr");
@@ -1321,7 +1329,6 @@
     tbody.appendChild(trR);
 
     // routine registration list (いつも タブ)
-    var routineListEl = document.getElementById("routineList");
     routineListEl.innerHTML = "";
     state.routines.forEach(function(r){
       var row = document.createElement("div");
@@ -1364,8 +1371,8 @@
     });
 
     // suggestions
-    var grid = document.getElementById("suggestGrid");
-    var emptyState = document.getElementById("suggestEmpty");
+    var grid = suggestGridEl;
+    var emptyState = suggestEmptyEl;
     grid.innerHTML = "";
     function playDoneCountToday(a){
       return tasks.filter(function(t){
@@ -1415,6 +1422,7 @@
         var pickBtn = card.querySelector(".suggest-pick");
         if(pickBtn){
           pickBtn.addEventListener("click", function(){
+            ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
             state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play", activityId: a.id });
             awardStar(a.name + " やったね！ ⭐");
             saveState(); render();
@@ -1439,6 +1447,20 @@
     routine: document.getElementById("panel-routine"),
     play: document.getElementById("panel-play")
   };
+  // elements render() touches on every single invocation: looked up once here (like
+  // tabButtons/panels above) instead of re-querying the DOM on every render().
+  var starCountEl = document.getElementById("starCount");
+  var wdLabelEl = document.getElementById("todayWeekdayLabel");
+  var fixedTotalEl = document.getElementById("fixedTotal");
+  var remainingLabelEl = document.getElementById("remainingLabel");
+  var remainingValueEl = document.getElementById("remainingValue");
+  var donutEl = document.getElementById("donut");
+  var warningSlotEl = document.getElementById("warningSlot");
+  var legendEl = document.getElementById("legend");
+  var tableBodyEl = document.getElementById("tableBody");
+  var routineListEl = document.getElementById("routineList");
+  var suggestGridEl = document.getElementById("suggestGrid");
+  var suggestEmptyEl = document.getElementById("suggestEmpty");
   function switchTab(name){
     tabButtons.forEach(function(btn){
       var active = btn.dataset.tab === name;
@@ -1473,7 +1495,7 @@
     fixedListEl.appendChild(row);
 
     var dial = buildDial(dialWrap.id, {
-      min:b.min, max:b.max, step:15, format:formatMinutes,
+      min:b.min, max:b.max, step:FIXED_DIAL_STEP, format:formatMinutes,
       ticks: b.ticks
     });
     dial.set(state.fixed[b.key]);
@@ -1510,6 +1532,7 @@
 
   document.getElementById("taskForm").addEventListener("submit", function(ev){
     ev.preventDefault();
+    ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
     var nameInput = document.getElementById("taskName");
     var name = nameInput.value.trim();
     var errorEl = document.getElementById("formError");
@@ -1554,6 +1577,7 @@
     if(ev.target === presetModalBackdrop) closePresetModal();
   });
   presetModalConfirmBtn.addEventListener("click", function(){
+    ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
     if(!presetModalDial.get()){ presetModalError.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
     var name = modalPendingName, minutes = presetModalDial.get();
     closePresetModal();
@@ -1698,6 +1722,7 @@
 
   document.getElementById("routineForm").addEventListener("submit", function(ev){
     ev.preventDefault();
+    ensureToday(); // resolve any pending day rollover before touching state.routines/state.day.tasks below
     var nameInput = document.getElementById("routineName");
     var name = nameInput.value.trim();
     var errorEl = document.getElementById("routineError");
@@ -1721,7 +1746,7 @@
   });
 
   if(state.timer) ensureTicking();
-  setInterval(function(){ ensureToday(); if(!state.timer) render(); }, 60000);
+  setInterval(function(){ var rolled = ensureToday(); if(rolled && !state.timer) render(); }, 60000);
   render();
 })();
 </script>
