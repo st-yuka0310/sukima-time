@@ -595,6 +595,17 @@
   function findRunningTask(){
     return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
   }
+  function deleteTask(id){
+    state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== id; });
+    saveState();
+    render();
+  }
+  function buildWarningBanner(messageHtml){
+    return '<div class="warning-banner">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
+      '<span>' + messageHtml + '</span>' +
+      '</div>';
+  }
 
   function weekdayColorVar(i){
     if(i === 0) return "var(--weekday-sun)";
@@ -718,11 +729,8 @@
       }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
       if(parsed.day && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.day.date)) parsed.day.date = todayStr();
-      if(parsed.day && typeof parsed.day.weekday !== "number"){
-        parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
-      }
       if(parsed.day && (typeof parsed.day.weekday !== "number" || isNaN(parsed.day.weekday) || parsed.day.weekday < 0 || parsed.day.weekday > 6)){
-        parsed.day.weekday = todayWeekday();
+        parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
       }
       // drop a corrupted timer (bad taskId/startedAt) so a stuck NaN:NaN countdown can never
       // happen; day.tasks has already been sanitized above, so this existence check is reliable.
@@ -1158,17 +1166,9 @@
       // school+other+sleep alone already exceed the day: freeTotal silently clamps to 0,
       // which would otherwise look like an (unexplained) task-overflow. Different root
       // cause, different message, and it takes priority over the isOver check below.
-      warnSlot.innerHTML =
-        '<div class="warning-banner">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
-        '<span><strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ダイヤルを みなおしてね。</span>' +
-        '</div>';
+      warnSlot.innerHTML = buildWarningBanner('<strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ダイヤルを みなおしてね。');
     } else if(isOver){
-      warnSlot.innerHTML =
-        '<div class="warning-banner">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2z" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="10" x2="12" y2="15" stroke="var(--warning)" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="18" r="1.2" fill="var(--warning)"/></svg>' +
-        '<span><strong>よていが ' + formatMinutes(overflow) + ' おおいよ。</strong> なにか へらしてみよう。</span>' +
-        '</div>';
+      warnSlot.innerHTML = buildWarningBanner('<strong>よていが ' + formatMinutes(overflow) + ' おおいよ。</strong> なにか へらしてみよう。');
     }
 
     // legend
@@ -1195,8 +1195,7 @@
         delPending.setAttribute("aria-label", t.name + " を けす");
         delPending.textContent = "×";
         delPending.addEventListener("click", function(){
-          state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== t.id; });
-          saveState(); render();
+          deleteTask(t.id);
         });
         head.appendChild(delPending);
         li.appendChild(head);
@@ -1262,8 +1261,7 @@
         del.setAttribute("aria-label", t.name + " を けす");
         del.textContent = "×";
         del.addEventListener("click", function(){
-          state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== t.id; });
-          saveState(); render();
+          deleteTask(t.id);
         });
         li.appendChild(del);
       }
