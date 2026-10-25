@@ -629,6 +629,11 @@
     popStarBadge();
     showToast(message);
   }
+  function buildTasksForWeekday(routines, weekday){
+    return routines.filter(function(r){ return r.weekdays.indexOf(weekday) !== -1; }).map(function(r){
+      return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
+    });
+  }
 
   function weekdayColorVar(i){
     if(i === 0) return "var(--weekday-sun)";
@@ -738,7 +743,7 @@
           date: h.date,
           weekday: (typeof h.weekday === "number" && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
-            return { name:t.name, minutes:(typeof t.minutes === "number" && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
+            return { name:t.name, minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
           }),
           starsEarnedToday: (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0
         };
@@ -752,7 +757,7 @@
         }).map(function(t){
           return {
             id: t.id, name: t.name,
-            minutes: (typeof t.minutes === "number" && t.minutes > 0) ? t.minutes : null,
+            minutes: (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null,
             completed: !!t.completed,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
             routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
@@ -771,9 +776,7 @@
         parsed.day = {
           date: freshDate,
           weekday: freshWeekday,
-          tasks: parsed.routines.filter(function(r){ return r.weekdays.indexOf(freshWeekday) !== -1; }).map(function(r){
-            return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
-          }),
+          tasks: buildTasksForWeekday(parsed.routines, freshWeekday),
           starsEarnedToday: 0
         };
       }
@@ -815,9 +818,7 @@
       state.history = state.history.slice(0, HISTORY_LIMIT);
     }
     var wd = now.getDay();
-    var tasks = state.routines.filter(function(r){ return r.weekdays.indexOf(wd) !== -1; }).map(function(r){
-      return {id:"day-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
-    });
+    var tasks = buildTasksForWeekday(state.routines, wd);
     state.day = {date: ts, weekday: wd, tasks: tasks, starsEarnedToday: 0};
     state.timer = null;
     activeLegendId = null;
@@ -1034,7 +1035,7 @@
     ensureToday();
     if(state.timer) return;
     var task = state.day.tasks.find(function(x){ return x.id === taskId; });
-    if(!task) return;
+    if(!task || task.minutes == null) return;
     state.timer = {taskId: taskId, startedAt: Date.now()};
     saveState();
     ensureTicking();
@@ -1807,6 +1808,12 @@
 
   if(state.timer) ensureTicking();
   setInterval(function(){ var rolled = ensureToday(); if(rolled) render(); }, 60000);
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible"){
+      var rolled = ensureToday();
+      if(rolled) render();
+    }
+  });
   render();
 })();
 </script>
