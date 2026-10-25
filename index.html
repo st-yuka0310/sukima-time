@@ -607,6 +607,14 @@
     span.textContent = text;
     return span;
   }
+  function makeDeleteButton(t){
+    var btn = document.createElement("button");
+    btn.className = "legend-icon-btn";
+    btn.setAttribute("aria-label", t.name + " を けす");
+    btn.textContent = "×";
+    btn.addEventListener("click", function(){ deleteTask(t.id); });
+    return btn;
+  }
   function deleteTask(id){
     ensureToday();
     if(state.timer && state.timer.taskId === id){
@@ -1114,7 +1122,7 @@
 
     starCountEl.textContent = state.stars;
 
-    var wd = todayWeekday();
+    var wd = state.day.weekday;
     wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
     wdLabelEl.style.color = weekdayColorVar(wd);
 
@@ -1140,8 +1148,9 @@
     var coloredTasks = tasks.map(function(t, i){
       if(t.minutes == null){
         // pending tasks aren't charted as donut slices, but their legend row still shows
-        // a colored dot: keep using the raw array index for that, unchanged from before.
-        return {task:t, color: colorVar(i, i >= SERIES_COUNT)};
+        // a dot: use a fixed neutral color (never a numbered series slot) so it can't
+        // coincidentally match an unrelated chartable task's actual chart slice color.
+        return {task:t, color: "var(--muted)"};
       }
       var color = colorVar(chartableIndex, chartableIndex >= SERIES_COUNT);
       chartableIndex++;
@@ -1251,13 +1260,7 @@
         hint.className = "legend-time";
         hint.textContent = "なんぷん？";
         head.appendChild(hint);
-        var delPending = document.createElement("button");
-        delPending.className = "legend-icon-btn";
-        delPending.setAttribute("aria-label", t.name + " を けす");
-        delPending.textContent = "×";
-        delPending.addEventListener("click", function(){
-          deleteTask(t.id);
-        });
+        var delPending = makeDeleteButton(t);
         head.appendChild(delPending);
         li.appendChild(head);
         var chipsWrap = document.createElement("div");
@@ -1292,13 +1295,7 @@
         check.setAttribute("viewBox","0 0 24 24");
         check.innerHTML = '<circle cx="12" cy="12" r="11" fill="none" stroke="var(--good)" stroke-width="2"/><path d="M7 12.5l3.2 3.5L17 9" fill="none" stroke="var(--good)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
         li.appendChild(time1); li.appendChild(check);
-        var delDone = document.createElement("button");
-        delDone.className = "legend-icon-btn";
-        delDone.setAttribute("aria-label", t.name + " を けす");
-        delDone.textContent = "×";
-        delDone.addEventListener("click", function(){
-          deleteTask(t.id);
-        });
+        var delDone = makeDeleteButton(t);
         li.appendChild(delDone);
       } else if(isRunning){
         var time2 = makeLegendTimeSpan(formatClock(running ? running.remainingSec : 0));
@@ -1322,13 +1319,7 @@
           play.addEventListener("click", function(){ startTimer(t.id); });
           li.appendChild(play);
         }
-        var del = document.createElement("button");
-        del.className = "legend-icon-btn";
-        del.setAttribute("aria-label", t.name + " を けす");
-        del.textContent = "×";
-        del.addEventListener("click", function(){
-          deleteTask(t.id);
-        });
+        var del = makeDeleteButton(t);
         li.appendChild(del);
       }
 
@@ -1794,7 +1785,7 @@
     errorEl.textContent = "";
     var routine = {id: newId("routine"), name: name, weekdays: days};
     state.routines.push(routine);
-    if(days.indexOf(todayWeekday()) !== -1){
+    if(days.indexOf(state.day.weekday) !== -1){
       state.day.tasks.push({id:"day-"+routine.id, name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
     }
     saveState();
