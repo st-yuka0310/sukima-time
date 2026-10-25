@@ -389,7 +389,7 @@
     </div>
   </header>
 
-  <p class="toast" id="toast" hidden></p>
+  <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
 
   <main class="tab-panels">
     <section class="tab-panel" data-panel="today" id="panel-today">
@@ -596,6 +596,10 @@
     return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
   }
   function deleteTask(id){
+    if(state.timer && state.timer.taskId === id){
+      state.timer = null;
+      stopTicking();
+    }
     state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== id; });
     saveState();
     render();
@@ -715,7 +719,7 @@
           }),
           starsEarnedToday: (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0
         };
-      });
+      }).slice(0, HISTORY_LIMIT);
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
       // drop/repair any task whose shape is malformed, so a single corrupted stored task
       // can never crash render() (which reads t.name/t.minutes/t.completed unconditionally).
@@ -735,9 +739,9 @@
       }
       if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
       if(parsed.day && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.day.date)) parsed.day.date = todayStr();
-      if(parsed.day && (typeof parsed.day.weekday !== "number" || isNaN(parsed.day.weekday) || parsed.day.weekday < 0 || parsed.day.weekday > 6)){
-        parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
-      }
+      // weekday is always derived fresh from the (already-corrected) date, so a repaired date
+      // can never be paired with a stale/mismatched stored weekday.
+      if(parsed.day) parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
       // drop a corrupted timer (bad taskId/startedAt) so a stuck NaN:NaN countdown can never
       // happen; day.tasks has already been sanitized above, so this existence check is reliable.
       if(parsed.timer){
@@ -778,6 +782,7 @@
     });
     state.day = {date: ts, weekday: wd, tasks: tasks, starsEarnedToday: 0};
     state.timer = null;
+    activeLegendId = null;
     saveState();
   }
   ensureToday();
@@ -1021,7 +1026,7 @@
     var t = findRunningTask();
     if(!t || t.minutes == null) return null;
     var plannedSec = t.minutes * 60;
-    var elapsedSec = Math.floor((Date.now() - state.timer.startedAt) / 1000);
+    var elapsedSec = Math.max(0, Math.floor((Date.now() - state.timer.startedAt) / 1000));
     return { task: t, plannedSec: plannedSec, remainingSec: Math.max(0, plannedSec - elapsedSec) };
   }
 
