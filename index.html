@@ -666,7 +666,9 @@
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
       var parsed = raw ? JSON.parse(raw) : null;
-      if(!parsed || !Array.isArray(parsed.routines) || !parsed.fixed) parsed = fallback;
+      if(!parsed || typeof parsed !== "object") parsed = fallback;
+      if(!Array.isArray(parsed.routines)) parsed.routines = fallback.routines;
+      if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
       FIXED_BLOCKS.forEach(function(b){
         if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
       });
@@ -972,6 +974,7 @@
     var remaining = Math.max(0, freeTotal - tasksSum);
     var isOver = overflow > 0;
     var runningTask = state.timer ? tasks.find(function(t){ return t.id === state.timer.taskId; }) : null;
+    var running = runningRemaining();
 
     document.getElementById("starCount").textContent = state.stars;
 
@@ -987,7 +990,6 @@
     var remainingValueEl = document.getElementById("remainingValue");
     remainingValueEl.classList.remove("is-live");
     if(runningTask){
-      var running = runningRemaining();
       remainingLabelEl.textContent = runningTask.name;
       remainingValueEl.textContent = formatClock(running ? running.remainingSec : 0);
       remainingValueEl.classList.add("is-live");
@@ -1039,8 +1041,7 @@
           overlay.id = "timerOverlayPath";
           overlay.dataset.start = gStart;
           overlay.dataset.end = gEnd;
-          var running2 = runningRemaining();
-          var frac = running2 ? running2.remainingSec/running2.plannedSec : 0;
+          var frac = running ? running.remainingSec/running.plannedSec : 0;
           overlay.setAttribute("d", arcPath(120,120,100,66,gStart, gStart+(gEnd-gStart)*frac));
           overlay.setAttribute("fill", s.color);
           svg.appendChild(overlay);
@@ -1136,8 +1137,7 @@
         var time2 = document.createElement("span");
         time2.className = "legend-time";
         time2.id = "legendCountdown";
-        var running3 = runningRemaining();
-        time2.textContent = formatClock(running3 ? running3.remainingSec : 0);
+        time2.textContent = formatClock(running ? running.remainingSec : 0);
         var stop = document.createElement("button");
         stop.className = "legend-icon-btn is-stop";
         stop.setAttribute("aria-label", t.name + " の たいまーを やめる");
@@ -1438,9 +1438,6 @@
   presetModalBackdrop.addEventListener("click", function(ev){
     if(ev.target === presetModalBackdrop) closePresetModal();
   });
-  document.addEventListener("keydown", function(ev){
-    if(ev.key === "Escape" && !presetModalBackdrop.hidden) closePresetModal();
-  });
   presetModalConfirmBtn.addEventListener("click", function(){
     if(!presetModalDial.get()){ presetModalError.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
     var name = modalPendingName, minutes = presetModalDial.get();
@@ -1510,6 +1507,7 @@
       });
     }
     historyModalBackdrop.hidden = false;
+    document.getElementById("historyModalClose").focus();
   }
   function closeHistoryModal(){
     historyModalBackdrop.hidden = true;
@@ -1523,15 +1521,15 @@
   historyModalBackdrop.addEventListener("click", function(ev){
     if(ev.target === historyModalBackdrop) closeHistoryModal();
   });
-  document.addEventListener("keydown", function(ev){
-    if(ev.key === "Escape" && !historyModalBackdrop.hidden) closeHistoryModal();
-  });
 
   // ---- usage guide ("？") ----------------------------------------------------
 
   var helpModalBackdrop = document.getElementById("helpModalBackdrop");
   var helpOpenerEl = null;
-  function openHelpModal(){ helpModalBackdrop.hidden = false; }
+  function openHelpModal(){
+    helpModalBackdrop.hidden = false;
+    document.getElementById("helpModalClose").focus();
+  }
   function closeHelpModal(){
     helpModalBackdrop.hidden = true;
     if(helpOpenerEl){ helpOpenerEl.focus(); helpOpenerEl = null; }
@@ -1544,8 +1542,14 @@
   helpModalBackdrop.addEventListener("click", function(ev){
     if(ev.target === helpModalBackdrop) closeHelpModal();
   });
+
+  // single consolidated Escape handler: closes only the top-most open modal
+  // (preset, then history, then help), never more than one per keypress.
   document.addEventListener("keydown", function(ev){
-    if(ev.key === "Escape" && !helpModalBackdrop.hidden) closeHelpModal();
+    if(ev.key !== "Escape") return;
+    if(!presetModalBackdrop.hidden){ closePresetModal(); return; }
+    if(!historyModalBackdrop.hidden){ closeHistoryModal(); return; }
+    if(!helpModalBackdrop.hidden){ closeHelpModal(); return; }
   });
 
   // ---- routine registration ("いつも" タブ) ----------------------------------
