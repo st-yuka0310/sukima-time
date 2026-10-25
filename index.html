@@ -236,7 +236,6 @@
     font: inherit; font-weight:700; font-size:.82rem; padding:8px 14px; border-radius:999px; cursor:pointer;
   }
   .chip.chip-sm{ padding:5px 10px; font-size:.74rem; }
-  .chip[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
   .field-error{ color:#c0392b; font-size:.78rem; font-weight:400; min-height:1em; }
   .btn{
     font: inherit; font-weight:700; border:none; border-radius:16px; padding:13px 18px; cursor:pointer;
@@ -351,7 +350,6 @@
     margin-top:4px; width:100%; border:1px solid var(--accent); background:transparent; color:var(--accent);
     font: inherit; font-weight:700; font-size:.78rem; padding:7px 8px; border-radius:12px; cursor:pointer;
   }
-  .suggest-pick[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); }
 
   /* bottom tab bar */
   .tabbar{
@@ -770,6 +768,13 @@
     return "var(--series-" + (index % SERIES_COUNT) + ")";
   }
 
+  function makeDot(className, colorValue){
+    var dot = document.createElement("span");
+    dot.className = className;
+    dot.style.background = colorValue;
+    return dot;
+  }
+
   // ---- dial: drag or tap around the ring to set a value within [min,max] ----
   // Visual feedback is instant on every move; the value is only committed
   // (onChange fires, which saves + re-renders the app) when the finger lifts,
@@ -983,7 +988,7 @@
     wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
     wdLabelEl.style.color = weekdayColorVar(wd);
 
-    FIXED_BLOCKS.forEach(function(b){ fixedDials[b.key].set(state.fixed[b.key]); });
+    FIXED_BLOCKS.forEach(function(b){ if(fixedDials[b.key].get() !== state.fixed[b.key]) fixedDials[b.key].set(state.fixed[b.key]); });
     document.getElementById("fixedTotal").textContent = formatMinutes(fixedSum);
 
     var remainingLabelEl = document.getElementById("remainingLabel");
@@ -1011,6 +1016,9 @@
     });
     if(!isOver && remaining > 0){
       slices.push({key:"__remaining", minutes: remaining, color:"var(--remaining)"});
+    }
+    if(activeLegendId !== null && !slices.some(function(s){ return s.key === activeLegendId; })){
+      activeLegendId = null;
     }
 
     var svgNS = "http://www.w3.org/2000/svg";
@@ -1085,9 +1093,7 @@
     legend.innerHTML = "";
     tasks.forEach(function(t, i){
       var li = document.createElement("li");
-      var dot = document.createElement("span");
-      dot.className = "legend-dot";
-      dot.style.background = colorVar(i, i >= SERIES_COUNT);
+      var dot = makeDot("legend-dot", colorVar(i, i >= SERIES_COUNT));
       var name = document.createElement("span");
       name.className = "legend-name";
       name.textContent = t.name;
@@ -1148,11 +1154,17 @@
         var time3 = document.createElement("span");
         time3.className = "legend-time";
         time3.textContent = formatMinutes(t.minutes);
-        var play = document.createElement("button");
-        play.className = "legend-icon-btn is-play";
-        play.setAttribute("aria-label", t.name + " を はじめる");
-        play.textContent = "▶";
-        play.addEventListener("click", function(){ startTimer(t.id); });
+        li.appendChild(time3);
+        // another task's timer is running: offering a second ▶ here would silently
+        // overwrite it (only one timer may run at a time), so just hide the control.
+        if(!state.timer){
+          var play = document.createElement("button");
+          play.className = "legend-icon-btn is-play";
+          play.setAttribute("aria-label", t.name + " を はじめる");
+          play.textContent = "▶";
+          play.addEventListener("click", function(){ startTimer(t.id); });
+          li.appendChild(play);
+        }
         var del = document.createElement("button");
         del.className = "legend-icon-btn";
         del.setAttribute("aria-label", t.name + " を けす");
@@ -1161,7 +1173,7 @@
           state.day.tasks = state.day.tasks.filter(function(x){ return x.id !== t.id; });
           saveState(); render();
         });
-        li.appendChild(time3); li.appendChild(play); li.appendChild(del);
+        li.appendChild(del);
       }
 
       li.addEventListener("click", function(ev){
@@ -1173,9 +1185,7 @@
     if(remaining > 0 && !isOver){
       var li2 = document.createElement("li");
       li2.classList.toggle("is-active", activeLegendId === "__remaining");
-      var dot2 = document.createElement("span");
-      dot2.className = "legend-dot";
-      dot2.style.background = "var(--remaining)";
+      var dot2 = makeDot("legend-dot", "var(--remaining)");
       var name2 = document.createElement("span");
       name2.className = "legend-name";
       name2.textContent = "あいてる じかん";
@@ -1344,9 +1354,7 @@
     row.className = "fixed-row";
     var head = document.createElement("div");
     head.className = "fixed-row-head";
-    var dot = document.createElement("span");
-    dot.className = "fixed-dot";
-    dot.style.background = "var(" + b.colorVar + ")";
+    var dot = makeDot("fixed-dot", "var(" + b.colorVar + ")");
     var name = document.createElement("span");
     name.className = "fixed-name";
     name.textContent = b.name;
