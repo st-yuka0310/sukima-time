@@ -598,6 +598,19 @@
   // shared with buildDial()'s dial.set(), so a stored value snaps to the exact same grid
   // the dial itself would produce for that same input.
   function snapToStep(raw, min, step){ return Math.round((raw-min)/step)*step + min; }
+  // Single source of truth for validating a numeric value pulled out of parsed JSON (localStorage
+  // can contain NaN/Infinity after corruption or tampering, and JSON.parse happily round-trips
+  // neither as a plain "number" typeof check would catch — both need the isFinite check too).
+  // Rejects to fallback (does not clamp) on anything invalid; callers that want clamping
+  // instead of rejection (e.g. negative-but-finite values) apply that separately on top.
+  function sanitizeNumber(v, fallback, opts){
+    opts = opts || {};
+    if(typeof v !== "number" || !isFinite(v)) return fallback;
+    if(opts.integer && !Number.isInteger(v)) return fallback;
+    if(typeof opts.min === "number" && v < opts.min) return fallback;
+    if(typeof opts.max === "number" && v > opts.max) return fallback;
+    return v;
+  }
   function findRunningTask(){
     return state.timer ? state.day.tasks.find(function(x){ return x.id === state.timer.taskId; }) : undefined;
   }
@@ -749,12 +762,12 @@
       });
       if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
       FIXED_BLOCKS.forEach(function(b){
-        if(typeof parsed.fixed[b.key] !== "number") parsed.fixed[b.key] = fallback.fixed[b.key];
+        parsed.fixed[b.key] = sanitizeNumber(parsed.fixed[b.key], fallback.fixed[b.key]);
         // snap to the same step grid buildDial()'s dial.set() snaps to, then clamp — otherwise
         // the dial's displayed (snapped) value could permanently disagree with this stored value.
         parsed.fixed[b.key] = clamp(snapToStep(parsed.fixed[b.key], b.min, FIXED_DIAL_STEP), b.min, b.max);
       });
-      if(typeof parsed.stars !== "number") parsed.stars = 0;
+      parsed.stars = sanitizeNumber(parsed.stars, 0);
       parsed.stars = Math.max(0, parsed.stars);
       if(!Array.isArray(parsed.history)) parsed.history = [];
       // drop/repair any history entry whose shape is malformed, so a single corrupted stored
@@ -768,7 +781,7 @@
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
             return { name:t.name, minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
           }),
-          starsEarnedToday: Math.max(0, (typeof h.starsEarnedToday === "number") ? h.starsEarnedToday : 0)
+          starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0))
         };
       }).slice(0, HISTORY_LIMIT);
       if(!parsed.day || typeof parsed.day !== "object" || !Array.isArray(parsed.day.tasks)) parsed.day = null;
@@ -788,7 +801,7 @@
           };
         });
       }
-      if(parsed.day && typeof parsed.day.starsEarnedToday !== "number") parsed.day.starsEarnedToday = 0;
+      if(parsed.day) parsed.day.starsEarnedToday = sanitizeNumber(parsed.day.starsEarnedToday, 0);
       if(parsed.day) parsed.day.starsEarnedToday = Math.max(0, parsed.day.starsEarnedToday);
       if(parsed.day && !isValidDateStr(parsed.day.date)){
         // an invalid stored date means this whole day object is untrustworthy — rebuild it
