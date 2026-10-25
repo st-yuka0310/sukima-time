@@ -614,6 +614,9 @@
   function findTaskById(id){
     return state.day.tasks.find(function(x){ return x.id === id; });
   }
+  function buildRoutineTaskId(dateStr, routineId){
+    return "day-" + dateStr + "-" + routineId;
+  }
   function legendDimFactor(key){
     return (activeLegendId && activeLegendId !== key) ? 0.35 : 1;
   }
@@ -669,7 +672,7 @@
   }
   function buildTasksForWeekday(routines, weekday, dateStr){
     return routines.filter(function(r){ return r.weekdays.indexOf(weekday) !== -1; }).map(function(r){
-      return {id:"day-"+dateStr+"-"+r.id, name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
+      return {id:buildRoutineTaskId(dateStr, r.id), name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
     });
   }
 
@@ -792,7 +795,7 @@
           date: h.date,
           weekday: (typeof h.weekday === "number" && Number.isInteger(h.weekday) && h.weekday >= 0 && h.weekday <= 6) ? h.weekday : new Date(h.date + "T00:00:00").getDay(),
           tasks: h.tasks.filter(function(t){ return t && typeof t.name === "string"; }).map(function(t){
-            return { name:t.name.slice(0, 20), minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null, completed:!!t.completed };
+            return { name:t.name.slice(0, 20), minutes:(typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null, completed:!!t.completed };
           }),
           starsEarnedToday: Math.max(0, sanitizeNumber(h.starsEarnedToday, 0, {integer: true}))
         };
@@ -806,7 +809,7 @@
         }).map(function(t){
           return {
             id: t.id, name: t.name.slice(0, 20),
-            minutes: (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0) ? t.minutes : null,
+            minutes: (typeof t.minutes === "number" && isFinite(t.minutes) && t.minutes > 0 && t.minutes <= DAY_MINUTES) ? t.minutes : null,
             completed: !!t.completed,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
             routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
@@ -1816,7 +1819,7 @@
     var routine = {id: newId("routine"), name: name, weekdays: days};
     state.routines.push(routine);
     if(days.indexOf(state.day.weekday) !== -1){
-      state.day.tasks.push({id:"day-"+state.day.date+"-"+routine.id, name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
+      state.day.tasks.push({id:buildRoutineTaskId(state.day.date, routine.id), name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
     }
     saveState();
     nameInput.value = "";
