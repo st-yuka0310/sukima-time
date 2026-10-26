@@ -171,6 +171,16 @@
   .fixed-total strong{ color:var(--ink); }
   .hint{ margin:0; font-size:.78rem; color:var(--muted); text-align:center; }
 
+  /* collapsed summary row for the fixed-blocks card: a tappable mini-card so the
+     rarely-changed school/sleep/other setup stays out of the way but easy to find */
+  .fixed-toggle{
+    width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    background: var(--surface); color: var(--ink); border:1px solid var(--border);
+    border-radius:16px; padding:13px 16px; box-shadow: var(--shadow);
+    font: inherit; font-weight:700; font-size:.85rem; cursor:pointer; text-align:left;
+  }
+  .fixed-toggle:active{ transform: scale(.98); }
+
   /* chart */
   .chart-wrap{ position:relative; width: 100%; max-width: 240px; margin: 0 auto; aspect-ratio: 1/1; }
   .chart-wrap svg{ width:100%; height:100%; display:block; overflow:visible; }
@@ -229,6 +239,7 @@
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
   .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible,
+  .fixed-toggle:focus-visible,
   .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
@@ -396,17 +407,6 @@
   <main class="tab-panels">
     <section class="tab-panel" data-panel="today" id="panel-today">
       <section class="card">
-        <h2>がっこう・すいみんなどの じかん</h2>
-        <p class="today-weekday" id="todayWeekdayLabel"></p>
-        <div class="fixed-list" id="fixedList"></div>
-        <div class="fixed-total">
-          <span>がっこう・すいみんなど ごうけい</span>
-          <strong id="fixedTotal">-</strong>
-        </div>
-        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
-      </section>
-
-      <section class="card">
         <h2>じゆうな じかんの つかいかた</h2>
         <div class="chart-wrap">
           <svg id="donut" viewBox="0 0 240 240" aria-hidden="true"></svg>
@@ -425,6 +425,18 @@
           </table>
         </div>
         <button class="link-btn" id="openHistory">きろくを みる ▸</button>
+      </section>
+
+      <button class="fixed-toggle" id="toggleFixed" aria-expanded="false" aria-controls="fixedCard">がっこう・すいみんなど： - ▾</button>
+      <section class="card" id="fixedCard" hidden>
+        <h2>がっこう・すいみんなどの じかん</h2>
+        <p class="today-weekday" id="todayWeekdayLabel"></p>
+        <div class="fixed-list" id="fixedList"></div>
+        <div class="fixed-total">
+          <span>がっこう・すいみんなど ごうけい</span>
+          <strong id="fixedTotal">-</strong>
+        </div>
+        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
       </section>
     </section>
 
@@ -894,6 +906,10 @@
   var toastHandle = null;
   var state = loadState();
   var activeLegendId = null;
+  // whether the collapsible がっこう・すいみん card (see #toggleFixed) is expanded; starts
+  // collapsed so the chart is the first thing a kid sees, and persists across render() calls
+  // the same way activeLegendId does (render() only reads it, never resets it).
+  var fixedCardExpanded = false;
   var tickHandle = null;
 
   function ensureToday(){
@@ -1212,6 +1228,9 @@
 
     FIXED_BLOCKS.forEach(function(b){ if(!fixedDials[b.key].isDragging() && fixedDials[b.key].get() !== state.fixed[b.key]) fixedDials[b.key].set(state.fixed[b.key]); });
     fixedTotalEl.textContent = formatMinutes(fixedSum);
+    fixedCardEl.hidden = !fixedCardExpanded;
+    toggleFixedEl.setAttribute("aria-expanded", String(fixedCardExpanded));
+    toggleFixedEl.textContent = "がっこう・すいみんなど： " + formatMinutes(fixedSum) + (fixedCardExpanded ? " ▴" : " ▾");
 
     remainingValueEl.classList.remove("is-live");
     if(runningTask){
@@ -1574,6 +1593,8 @@
   var starCountEl = document.getElementById("starCount");
   var wdLabelEl = document.getElementById("todayWeekdayLabel");
   var fixedTotalEl = document.getElementById("fixedTotal");
+  var toggleFixedEl = document.getElementById("toggleFixed");
+  var fixedCardEl = document.getElementById("fixedCard");
   var remainingLabelEl = document.getElementById("remainingLabel");
   var remainingValueEl = document.getElementById("remainingValue");
   var donutEl = document.getElementById("donut");
@@ -1597,6 +1618,11 @@
   });
 
   // ---- fixed-block dials (きょう タブ) ---------------------------------------
+
+  toggleFixedEl.addEventListener("click", function(){
+    fixedCardExpanded = !fixedCardExpanded;
+    render();
+  });
 
   var fixedDials = {};
   var fixedListEl = document.getElementById("fixedList");
