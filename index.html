@@ -675,9 +675,12 @@
     popStarBadge();
     showToast(message);
   }
+  // builds a brand-new day's routine-origin tasks in one batch; always called to populate a
+  // freshly-created day (colorIndex 0,1,2,... in weekday-match order), never to append onto an
+  // existing day, so each task's position in the filtered/mapped result IS its final colorIndex.
   function buildTasksForWeekday(routines, weekday, dateStr){
-    return routines.filter(function(r){ return r.weekdays.indexOf(weekday) !== -1; }).map(function(r){
-      return {id:buildRoutineTaskId(dateStr, r.id), name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id};
+    return routines.filter(function(r){ return r.weekdays.indexOf(weekday) !== -1; }).map(function(r, i){
+      return {id:buildRoutineTaskId(dateStr, r.id), name:r.name, minutes:null, completed:false, origin:"routine", routineId:r.id, colorIndex:i};
     });
   }
 
@@ -823,7 +826,10 @@
             completed: (dMinutes != null) ? !!t.completed : false,
             origin: (typeof t.origin === "string") ? t.origin : "variable",
             routineId: (typeof t.routineId === "string") ? t.routineId : undefined,
-            activityId: (typeof t.activityId === "string") ? t.activityId : undefined
+            activityId: (typeof t.activityId === "string") ? t.activityId : undefined,
+            // passed through as-is here; fixed up below (migration for pre-colorIndex saves,
+            // or repair of any malformed stored value) once the full task list is in hand.
+            colorIndex: t.colorIndex
           };
         });
       }
@@ -836,16 +842,33 @@
         // survive, mislabeled as belonging to the freshly-assigned "today".
         var freshDate = todayStr();
         var freshWeekday = new Date(freshDate + "T00:00:00").getDay();
+        var freshTasks = buildTasksForWeekday(parsed.routines, freshWeekday, freshDate);
         parsed.day = {
           date: freshDate,
           weekday: freshWeekday,
-          tasks: buildTasksForWeekday(parsed.routines, freshWeekday, freshDate),
-          starsEarnedToday: 0
+          tasks: freshTasks,
+          starsEarnedToday: 0,
+          nextColorIndex: freshTasks.length
         };
       }
       // weekday is always derived fresh from the (already-corrected) date, so a repaired date
       // can never be paired with a stale/mismatched stored weekday.
       if(parsed.day) parsed.day.weekday = new Date(parsed.day.date + "T00:00:00").getDay();
+      if(parsed.day){
+        // colorIndex migration/repair: fill in any task missing a valid colorIndex (saves from
+        // before this field existed, or a corrupted stored value) with a fresh index, never
+        // reusing one already present, in array order — this keeps each task's donut/legend
+        // color stable across reloads instead of recomputed from live position every render.
+        var highestColorIndex = -1;
+        parsed.day.tasks.forEach(function(t){
+          if(typeof t.colorIndex !== "number" || !isFinite(t.colorIndex) || !Number.isInteger(t.colorIndex) || t.colorIndex < 0){
+            t.colorIndex = highestColorIndex + 1;
+          }
+          if(t.colorIndex > highestColorIndex) highestColorIndex = t.colorIndex;
+        });
+        parsed.day.nextColorIndex = sanitizeNumber(parsed.day.nextColorIndex, highestColorIndex + 1, {integer:true, min:0});
+        if(parsed.day.nextColorIndex < highestColorIndex + 1) parsed.day.nextColorIndex = highestColorIndex + 1;
+      }
       // drop a corrupted timer (bad taskId/startedAt) so a stuck NaN:NaN countdown can never
       // happen; day.tasks has already been sanitized above, so this existence check is reliable.
       if(parsed.timer){
@@ -888,7 +911,7 @@
     }
     var wd = now.getDay();
     var tasks = buildTasksForWeekday(state.routines, wd, ts);
-    state.day = {date: ts, weekday: wd, tasks: tasks, starsEarnedToday: 0};
+    state.day = {date: ts, weekday: wd, tasks: tasks, starsEarnedToday: 0, nextColorIndex: tasks.length};
     state.timer = null;
     activeLegendId = null;
     saveState();
@@ -1205,7 +1228,6 @@
     // donut: today's free-time budget only (not the whole 24h day). Tasks whose minutes
     // are not yet estimated (null) are left out of the chart until a duration is set.
     var donutTotal = isOver ? tasksSum : freeTotal;
-    var chartableIndex = 0;
     var coloredTasks = tasks.map(function(t, i){
       if(t.minutes == null){
         // pending tasks aren't charted as donut slices, but their legend row still shows
@@ -1213,8 +1235,10 @@
         // coincidentally match an unrelated chartable task's actual chart slice color.
         return {task:t, color: "var(--muted)"};
       }
-      var color = colorVar(chartableIndex, chartableIndex >= SERIES_COUNT);
-      chartableIndex++;
+      // each task's color is read from its own stable colorIndex (assigned once at creation
+      // time), not recomputed from its live position among chartable tasks on every render —
+      // otherwise deleting/completing an earlier task would shift every later task's color.
+      var color = colorVar(t.colorIndex, t.colorIndex >= SERIES_COUNT);
       return {task:t, color: color};
     });
     var slices = coloredTasks.filter(function(ct){ return ct.task.minutes != null; }).map(function(ct){
@@ -1519,7 +1543,9 @@
             if(pickBtn.disabled) return;
             pickBtn.disabled = true;
             ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
-            state.day.tasks.push({ id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play", activityId: a.id });
+            var newPlayTask = { id: newId("t"), name: a.name, minutes: a.need, completed:true, origin:"play", activityId: a.id, colorIndex: state.day.nextColorIndex };
+            state.day.nextColorIndex += 1;
+            state.day.tasks.push(newPlayTask);
             awardStar(a.name + " やったね！ ⭐");
             saveState(); render();
           });
@@ -1619,7 +1645,9 @@
   function newId(prefix){ return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2,6); }
 
   function addVariableTask(name, minutes){
-    state.day.tasks.push({ id: newId("t"), name: name, minutes: minutes, completed:false, origin:"variable" });
+    var newTask = { id: newId("t"), name: name, minutes: minutes, completed:false, origin:"variable", colorIndex: state.day.nextColorIndex };
+    state.day.nextColorIndex += 1;
+    state.day.tasks.push(newTask);
     saveState();
     showToast(name + " を ついかしたよ！");
     switchTab("today");
@@ -1837,7 +1865,9 @@
     var routine = {id: newId("routine"), name: name, weekdays: days};
     state.routines.push(routine);
     if(days.indexOf(state.day.weekday) !== -1){
-      state.day.tasks.push({id:buildRoutineTaskId(state.day.date, routine.id), name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id});
+      var newRoutineTask = {id:buildRoutineTaskId(state.day.date, routine.id), name:routine.name, minutes:null, completed:false, origin:"routine", routineId:routine.id, colorIndex: state.day.nextColorIndex};
+      state.day.nextColorIndex += 1;
+      state.day.tasks.push(newRoutineTask);
     }
     saveState();
     nameInput.value = "";
