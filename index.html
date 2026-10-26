@@ -370,6 +370,26 @@
     font: inherit; font-weight:700; font-size:.78rem; padding:7px 8px; border-radius:12px; cursor:pointer;
   }
 
+  /* 24h day timeline ("いちにち" タブ): one absolute-positioned horizontal bar spanning
+     0:00-24:00, built from buildDayTimeline()'s ordered {type,start,end,label} segments
+     (the 3 fixed blocks, reusing their own --fixed-* dot colors, plus free-time gaps in
+     an accent tone so "open time" visually pops against the neutral fixed-block grays).
+     Absolute positioning (not flex) keeps each segment's left/width tied directly to its
+     own start/end minute, so it stays correct even if two fixed blocks ever overlap. */
+  .dayline-bar{
+    position:relative; width:100%; height:64px; border-radius:16px; overflow:hidden;
+    background:var(--bg); border:1px solid var(--border);
+  }
+  .dayline-seg{
+    position:absolute; top:0; bottom:0; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; padding:0 4px; font-size:.72rem; font-weight:700; color:var(--ink);
+    border-right:2px solid var(--bg);
+  }
+  .dayline-seg span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dayline-seg.is-free{ background:var(--accent-soft); color:var(--accent); }
+  .dayline-gridline{ position:absolute; top:0; bottom:0; width:1px; background:var(--surface); opacity:.55; }
+  .dayline-ticks{ display:flex; justify-content:space-between; margin:6px 2px 0; font-size:.72rem; color:var(--muted); font-variant-numeric: tabular-nums; }
+
   /* bottom tab bar */
   .tabbar{
     position: fixed; left:0; right:0; bottom:0; z-index:10;
@@ -499,6 +519,18 @@
         <div class="suggest-grid" id="suggestGrid"></div>
       </section>
     </section>
+
+    <section class="tab-panel" data-panel="dayline" id="panel-dayline" hidden>
+      <section class="card">
+        <h2>1にちの ながれ</h2>
+        <p class="hint">がっこう・すいみんなどと、じゆうな じかんが いつ あるか みてみよう</p>
+        <div class="dayline-bar" id="daylineBar"></div>
+        <div class="dayline-ticks">
+          <span>0じ</span><span>6じ</span><span>12じ</span><span>18じ</span><span>24じ</span>
+        </div>
+        <ul class="legend" id="daylineLegend"></ul>
+      </section>
+    </section>
   </main>
 
   <nav class="tabbar" aria-label="がめんの きりかえ">
@@ -518,6 +550,10 @@
       <button class="tab-btn" data-tab="play" role="tab" aria-selected="false" aria-controls="panel-play">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
         あそび
+      </button>
+      <button class="tab-btn" data-tab="dayline" role="tab" aria-selected="false" aria-controls="panel-dayline">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="9" width="20" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><line x1="8.5" y1="9" x2="8.5" y2="15" stroke="currentColor" stroke-width="2"/><line x1="15.5" y1="9" x2="15.5" y2="15" stroke="currentColor" stroke-width="2"/></svg>
+        いちにち
       </button>
     </div>
   </nav>
@@ -580,6 +616,13 @@
           <div class="help-body">
             <h3>あそび</h3>
             <p>あいてる じかんで できる あそびを みつけよう。「やってみる」を おすと、きょうの よていに ついかされるよ。</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="9" width="20" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><line x1="8.5" y1="9" x2="8.5" y2="15" stroke="currentColor" stroke-width="2"/><line x1="15.5" y1="9" x2="15.5" y2="15" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="help-body">
+            <h3>いちにち</h3>
+            <p>がっこう・すいみんなどが 1にちの どこに あるか、ぼうグラフで みれるよ。あいている じかんも ひとめで わかるよ。</p>
           </div>
         </div>
         <div class="help-section">
@@ -654,6 +697,60 @@
     }
     if(key === "other") return f.length;
     return Math.max(0, f.end - f.start);
+  }
+  // key -> colorVar lookup for FIXED_BLOCKS, used by the "いちにち" day-timeline so it can
+  // reuse each block's own dot color without re-deriving it from FIXED_BLOCKS every call.
+  var FIXED_COLOR_VAR = {};
+  FIXED_BLOCKS.forEach(function(b){ FIXED_COLOR_VAR[b.key] = b.colorVar; });
+  // minutes-since-midnight -> "H:MM", except 1440 itself reads as "24:00" (the day's own
+  // end), unlike formatTimeOfDay()'s wrap-to-0:00 — only used for the timeline's own edges.
+  function formatDayEdge(totalMinutes){
+    return totalMinutes >= DAY_MINUTES ? "24:00" : formatTimeOfDay(totalMinutes);
+  }
+  // builds the ordered list of segments for the "いちにち" (whole-day) timeline: each fixed
+  // block's own occupied minute-range(s) (school/other: one; sleep: two when it wraps past
+  // midnight, both still labeled/colored as one continuous block), plus a "free" segment for
+  // every gap left over once the (merged, so any accidental overlap between blocks collapses
+  // into one range) union of occupied time is subtracted from the full 24h day. Never places
+  // individual tasks — they carry no time-of-day data, only a duration.
+  function buildDayTimeline(fixed){
+    var occupied = [];
+    FIXED_BLOCKS.forEach(function(b){
+      var duration = fixedBlockDuration(b.key, fixed);
+      if(duration <= 0) return;
+      var start = fixed[b.key].start;
+      var end = start + duration;
+      if(end > DAY_MINUTES){
+        // wraps past midnight (typically sleep): split into two same-type/same-label
+        // pieces so the bar (which only spans 0:00-24:00 once) still reads as one block.
+        occupied.push({type:b.key, start:start, end:DAY_MINUTES, label:b.name});
+        occupied.push({type:b.key, start:0, end:end-DAY_MINUTES, label:b.name});
+      } else {
+        occupied.push({type:b.key, start:start, end:end, label:b.name});
+      }
+    });
+    occupied.sort(function(a,c){ return a.start-c.start; });
+
+    // merge overlapping/adjacent occupied ranges into a clean union, purely to compute the
+    // free-time gaps below — the per-block segments pushed into `segments` stay unmerged so
+    // each still renders/labels as its own fixed block.
+    var merged = [];
+    occupied.forEach(function(seg){
+      var last = merged[merged.length-1];
+      if(last && seg.start <= last.end) last.end = Math.max(last.end, seg.end);
+      else merged.push({start:seg.start, end:seg.end});
+    });
+
+    var segments = occupied.slice();
+    var cursor = 0;
+    merged.forEach(function(m){
+      if(m.start > cursor) segments.push({type:"free", start:cursor, end:m.start, label:"じゆうな じかん"});
+      cursor = Math.max(cursor, m.end);
+    });
+    if(cursor < DAY_MINUTES) segments.push({type:"free", start:cursor, end:DAY_MINUTES, label:"じゆうな じかん"});
+
+    segments.sort(function(a,c){ return a.start-c.start; });
+    return segments;
   }
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
@@ -1289,6 +1386,52 @@
     }
   }
 
+  // renders the "いちにち" tab's 24h bar + legend from buildDayTimeline()'s segment list.
+  // Pure display: never touches state, so render() can call it unconditionally every time.
+  function renderDayline(fixed){
+    var segments = buildDayTimeline(fixed);
+
+    var bar = daylineBarEl;
+    bar.innerHTML = "";
+    [360,720,1080].forEach(function(m){
+      var line = document.createElement("div");
+      line.className = "dayline-gridline";
+      line.style.left = (m/DAY_MINUTES*100) + "%";
+      bar.appendChild(line);
+    });
+    segments.forEach(function(seg){
+      var minutes = seg.end - seg.start;
+      var div = document.createElement("div");
+      div.className = "dayline-seg" + (seg.type === "free" ? " is-free" : "");
+      div.style.left = (seg.start/DAY_MINUTES*100) + "%";
+      div.style.width = (minutes/DAY_MINUTES*100) + "%";
+      if(seg.type !== "free") div.style.background = "var(" + FIXED_COLOR_VAR[seg.type] + ")";
+      div.title = seg.label + " " + formatDayEdge(seg.start) + "〜" + formatDayEdge(seg.end) + "（" + formatMinutes(minutes) + "）";
+      // a narrow segment (e.g. a short free-time gap) just stays a color block — cramming
+      // in unreadable text would do more harm than the full breakdown below already fixes.
+      if(minutes >= 120){
+        var span = document.createElement("span");
+        span.textContent = seg.label;
+        div.appendChild(span);
+      }
+      bar.appendChild(div);
+    });
+
+    var legend = daylineLegendEl;
+    legend.innerHTML = "";
+    segments.forEach(function(seg){
+      var li = document.createElement("li");
+      var colorValue = seg.type === "free" ? "var(--accent)" : "var(" + FIXED_COLOR_VAR[seg.type] + ")";
+      var dot = makeDot("legend-dot", colorValue);
+      var name = document.createElement("span");
+      name.className = "legend-name";
+      name.textContent = seg.label;
+      var time = makeLegendTimeSpan(formatDayEdge(seg.start) + "〜" + formatDayEdge(seg.end) + "・" + formatMinutes(seg.end-seg.start));
+      li.appendChild(dot); li.appendChild(name); li.appendChild(time);
+      legend.appendChild(li);
+    });
+  }
+
   // ---- render ------------------------------------------------------------
 
   function render(){
@@ -1320,6 +1463,7 @@
       fixedBlockTotalEls[b.key].textContent = "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed));
     });
     fixedTotalEl.textContent = formatMinutes(fixedSum);
+    renderDayline(state.fixed);
     fixedCardEl.hidden = !fixedCardExpanded;
     toggleFixedEl.setAttribute("aria-expanded", String(fixedCardExpanded));
     toggleFixedEl.textContent = "がっこう・すいみんなど： " + formatMinutes(fixedSum) + (fixedCardExpanded ? " ▴" : " ▾");
@@ -1678,7 +1822,8 @@
     today: document.getElementById("panel-today"),
     oneoff: document.getElementById("panel-oneoff"),
     routine: document.getElementById("panel-routine"),
-    play: document.getElementById("panel-play")
+    play: document.getElementById("panel-play"),
+    dayline: document.getElementById("panel-dayline")
   };
   // elements render() touches on every single invocation: looked up once here (like
   // tabButtons/panels above) instead of re-querying the DOM on every render().
@@ -1696,6 +1841,8 @@
   var routineListEl = document.getElementById("routineList");
   var suggestGridEl = document.getElementById("suggestGrid");
   var suggestEmptyEl = document.getElementById("suggestEmpty");
+  var daylineBarEl = document.getElementById("daylineBar");
+  var daylineLegendEl = document.getElementById("daylineLegend");
   function switchTab(name){
     tabButtons.forEach(function(btn){
       var active = btn.dataset.tab === name;
