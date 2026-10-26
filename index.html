@@ -163,8 +163,9 @@
   }
   .tab-panels{ display:flex; flex-direction:column; gap:16px; }
 
-  /* fixed day blocks: name+dot header, then a small row of clock-face/duration dials
-     (2 per block: start+end for school/sleep, start+length for other) */
+  /* fixed day blocks: name+dot header, then a small row of tappable preset time/duration
+     buttons per field (2 fields per block: start+end for school/sleep, start+length for
+     other) — see the preset-button-row setup near fixedListEl in the script. */
   .fixed-list{ display:flex; flex-direction:column; gap:20px; }
   .fixed-block{ display:flex; flex-direction:column; gap:10px; }
   .fixed-block + .fixed-block{ border-top:1px solid var(--border); padding-top:20px; }
@@ -172,8 +173,19 @@
   .fixed-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
   .fixed-name{ font-size:.88rem; font-weight:700; min-width:0; overflow-wrap:anywhere; }
   .fixed-dials{ display:flex; justify-content:center; flex-wrap:wrap; gap:16px; }
-  .fixed-dial-group{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .fixed-dial-group{ display:flex; flex-direction:column; align-items:center; gap:6px; max-width:200px; }
   .fixed-dial-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); text-align:center; }
+  /* preset-button row for a single fixed-block field: modeled on .weekday-row/.weekday-chip's
+     persistent-selection pattern (aria-pressed toggles active vs. inactive) rather than the
+     one-shot legend-pending-chips, since a fixed-block value stays selected until re-tapped. */
+  .fixed-preset-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+  .fixed-preset-btn{
+    border:1.5px solid var(--border); background:var(--bg); color:var(--ink);
+    font: inherit; font-weight:700; font-size:.78rem; padding:6px 11px; border-radius:999px;
+    cursor:pointer; font-variant-numeric: tabular-nums;
+  }
+  .fixed-preset-btn[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .fixed-preset-btn:active{ transform: scale(.95); }
   .fixed-block-total{ margin:0; font-size:.8rem; color:var(--ink-soft); text-align:center; }
   .fixed-block-total strong{ color:var(--ink); }
   .fixed-total{
@@ -251,7 +263,7 @@
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
   .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible,
-  .fixed-toggle:focus-visible,
+  .fixed-toggle:focus-visible, .fixed-preset-btn:focus-visible,
   .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
@@ -329,21 +341,17 @@
      row underneath so a long label (e.g. "1じかん30ぷん") never has to share the
      cramped space inside the ring with a button. */
   .dial-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; width:150px; margin:8px auto 0; flex:0 0 auto; }
-  .dial-wrap.dial-sm{ width:112px; margin:0; gap:8px; }
   .dial-visual{ position:relative; width:100%; aspect-ratio:1/1; }
   .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
   .dial-center{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     pointer-events:none; padding:0 22px; text-align:center;
   }
-  .dial-sm .dial-center{ padding:0 16px; }
   .dial-value{
     font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
     font-variant-numeric: tabular-nums; color: var(--ink);
   }
-  .dial-sm .dial-value{ font-size:.86rem; }
   .dial-nudge-row{ display:flex; align-items:center; justify-content:center; gap:20px; }
-  .dial-sm .dial-nudge-row{ gap:16px; }
   /* tap-only fine adjustment: no keyboard, nudges by the dial's own snap step */
   .dial-nudge-btn{
     flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:none;
@@ -352,7 +360,6 @@
   }
   .dial-nudge-btn:active{ transform: scale(.9); }
   .dial-nudge-btn:disabled{ opacity:.4; cursor:default; }
-  .dial-sm .dial-nudge-btn{ width:24px; height:24px; font-size:.9rem; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -478,7 +485,7 @@
           <span>がっこう・すいみんなど ごうけい</span>
           <strong id="fixedTotal">-</strong>
         </div>
-        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
+        <p class="hint">ボタンを タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
       </section>
     </section>
 
@@ -593,7 +600,7 @@
           <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 12V3A9 9 0 0 1 19.5 16.5Z" fill="currentColor"/></svg>
           <div class="help-body">
             <h3>きょう</h3>
-            <p>がっこう・すいみんなどの じかんをダイヤルで あわせると、きょう じゆうに つかえる じかんが わかるよ。まるい グラフと リストで みれるよ。</p>
+            <p>がっこう・すいみんなどの じかんをボタンで あわせると、きょう じゆうに つかえる じかんが わかるよ。まるい グラフと リストで みれるよ。</p>
           </div>
         </div>
         <div class="help-section">
@@ -648,21 +655,26 @@
   // each block now stores a time-of-day start (+ end, or + a plain length for "other"),
   // never a flat duration directly — see fixedBlockDuration() below for how the duration
   // used by fixedSum/freeTotal is derived from these fields.
+  // each field now lists its own small set of tappable preset values (minutes-since-midnight
+  // for start/end, plain minutes for "other"'s length) instead of driving a clock-face/duration
+  // dial — see the preset-button-row setup near fixedListEl below. `format` renders each preset's
+  // button label; every FIXED_DEFAULTS value below is deliberately included in its own field's
+  // preset list so the default always shows as a selected button on first load.
   var FIXED_BLOCKS = [
     {key:"school", name:"がっこう",            colorVar:"--fixed-school",
       fields:[
-        {sub:"start", name:"がっこうが はじまる"},
-        {sub:"end",   name:"がっこうが おわる"}
+        {sub:"start", name:"がっこうが はじまる",  presets:[420,450,480,510,540],              format:formatTimeOfDay},
+        {sub:"end",   name:"がっこうが おわる",    presets:[840,870,900,930,960],              format:formatTimeOfDay}
       ]},
     {key:"other",  name:"ごはん・おふろ など", colorVar:"--fixed-other",
       fields:[
-        {sub:"start",  name:"はじまる じかん"},
-        {sub:"length", name:"どれくらい"}
+        {sub:"start",  name:"はじまる じかん", presets:[420,720,900,960,1020,1080,1140],   format:formatTimeOfDay},
+        {sub:"length", name:"どれくらい",      presets:[15,30,45,60,90,120],               format:formatMinutes}
       ]},
     {key:"sleep",  name:"すいみん",            colorVar:"--fixed-sleep",
       fields:[
-        {sub:"start", name:"ねる じかん"},
-        {sub:"end",   name:"おきる じかん"}
+        {sub:"start", name:"ねる じかん",   presets:[1140,1170,1200,1230,1260,1290,1320], format:formatTimeOfDay},
+        {sub:"end",   name:"おきる じかん", presets:[330,360,390,420,450],                format:formatTimeOfDay}
       ]}
   ];
   // defaults for state.fixed: start/end/length are all minutes-since-midnight.
@@ -671,20 +683,6 @@
     sleep:  {start:1260, end:390},   // 21:00 -> 6:30 (wraps past midnight)
     other:  {start:960,  length:60}  // 16:00, for 1じかん
   };
-  // clock-face dial (time-of-day): min:0, max:1439 so 0:00/24:00 share one screen position,
-  // which is correct for a real 24h clock (unlike buildDial()'s usual tick-skip-at-max guard,
-  // meant to avoid a duplicate label — nothing here is ever configured at exactly 1439).
-  var TIME_DIAL_STEP = 10;
-  var TIME_DIAL_TICKS = [
-    {value:0,    label:"0じ"},
-    {value:360,  label:"6じ"},
-    {value:720,  label:"12じ"},
-    {value:1080, label:"18じ"}
-  ];
-  // "other"'s length dial reuses the exact range/step of the existing task-duration dials
-  // (taskDial/presetModalDial below), not a new range.
-  var OTHER_LENGTH_MAX = 240;
-  var OTHER_LENGTH_STEP = 5;
   // each block's own total duration is now derived from start/end (or start/length), never
   // stored directly: school/other are same-day subtraction, sleep wraps past midnight.
   function fixedBlockDuration(key, fixed){
@@ -966,12 +964,14 @@
             var isLength = (sub === "length");
             var checked = sanitizeNumber(v[sub], NaN, {integer:true, min:0, max: isLength ? DAY_MINUTES : 1439});
             if(!isFinite(checked)){ valid = false; return; }
-            // snap to the same step grid buildDial()'s dial.set() snaps to, then clamp —
-            // otherwise the dial's displayed (snapped) value could permanently disagree
-            // with this stored value.
+            // snap/clamp to the same grid this field always used (10-minute steps for
+            // time-of-day, 0-1439; 5-minute steps for "other"'s length, 0-240) — this is
+            // independent of the preset buttons now shown for this field: a legacy stored
+            // value that doesn't exactly match any preset still lands on a sane, bounded
+            // value, it just won't show any preset button as active for it.
             next[sub] = isLength
-              ? clamp(snapToStep(checked, 0, OTHER_LENGTH_STEP), 0, OTHER_LENGTH_MAX)
-              : clamp(snapToStep(checked, 0, TIME_DIAL_STEP), 0, 1439);
+              ? clamp(snapToStep(checked, 0, 5), 0, 240)
+              : clamp(snapToStep(checked, 0, 10), 0, 1439);
           });
         }
         parsed.fixed[b.key] = valid ? next : shallowClone(FIXED_DEFAULTS[b.key]);
@@ -1455,9 +1455,7 @@
 
     FIXED_BLOCKS.forEach(function(b){
       b.fields.forEach(function(field){
-        var dial = fixedDials[b.key][field.sub];
-        var v = state.fixed[b.key][field.sub];
-        if(!dial.isDragging() && dial.get() !== v) dial.set(v);
+        paintFixedPresetRow(b.key, field.sub);
       });
       fixedBlockTotalEls[b.key].textContent = "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed));
     });
@@ -1574,7 +1572,7 @@
       // school+other+sleep alone already exceed the day: freeTotal silently clamps to 0,
       // which would otherwise look like an (unexplained) task-overflow. Different root
       // cause, different message, and it takes priority over the isOver check below.
-      warnSlot.innerHTML = buildWarningBanner('<strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ダイヤルを みなおしてね。');
+      warnSlot.innerHTML = buildWarningBanner('<strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ボタンを みなおしてね。');
     } else if(isOver){
       warnSlot.innerHTML = buildWarningBanner('<strong>よていが ' + formatMinutes(overflow) + ' おおいよ。</strong> なにか へらしてみよう。');
     }
@@ -1861,7 +1859,18 @@
     render();
   });
 
-  var fixedDials = {};
+  // key -> sub -> the preset row's own <div>, so paintFixedPresetRow() (called from render(),
+  // mirroring how paintWeekdayChip() repaints the routine weekday chips) can re-walk its
+  // buttons and toggle aria-pressed to match the latest state.fixed[key][sub].
+  var fixedPresetRows = {};
+  function paintFixedPresetRow(key, sub){
+    var row = fixedPresetRows[key][sub];
+    var current = state.fixed[key][sub];
+    Array.prototype.forEach.call(row.children, function(btn){
+      btn.setAttribute("aria-pressed", String(Number(btn.dataset.value) === current));
+    });
+  }
+
   var fixedBlockTotalEls = {};
   var fixedListEl = document.getElementById("fixedList");
   FIXED_BLOCKS.forEach(function(b){
@@ -1888,30 +1897,37 @@
 
     fixedListEl.appendChild(block);
 
-    fixedDials[b.key] = {};
+    fixedPresetRows[b.key] = {};
     b.fields.forEach(function(field){
       var group = document.createElement("div");
       group.className = "fixed-dial-group";
       var label = document.createElement("span");
       label.className = "fixed-dial-label";
       label.textContent = field.name;
-      var dialWrap = document.createElement("div");
-      dialWrap.className = "dial-wrap dial-sm";
-      dialWrap.id = "fixedDial-" + b.key + "-" + field.sub;
-      group.appendChild(label); group.appendChild(dialWrap);
-      dialsRow.appendChild(group);
+      group.appendChild(label);
 
-      // "length" (other's duration) reuses the plain duration dial; start/end are
-      // 24h clock-face dials (see TIME_DIAL_STEP/TIME_DIAL_TICKS above).
-      var dial = (field.sub === "length")
-        ? buildDial(dialWrap.id, {max:OTHER_LENGTH_MAX, step:OTHER_LENGTH_STEP, format:formatMinutes})
-        : buildDial(dialWrap.id, {min:0, max:1439, step:TIME_DIAL_STEP, format:formatTimeOfDay, tickFormat:formatTimeOfDay, ticks:TIME_DIAL_TICKS});
-      dial.set(state.fixed[b.key][field.sub]);
-      dial.onChange(function(v){
-        state.fixed[b.key][field.sub] = v;
-        saveState(); render();
+      // tappable preset row: same direct-commit-on-tap pattern as the routine weekday chips
+      // (paintWeekdayChip) — click immediately writes into state.fixed and re-renders, no
+      // drag/confirm step. A stored value that matches none of these presets (e.g. left over
+      // from the old dial) just leaves every button here unpressed; see paintFixedPresetRow().
+      var row = document.createElement("div");
+      row.className = "fixed-preset-row";
+      field.presets.forEach(function(v){
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "fixed-preset-btn";
+        btn.textContent = field.format(v);
+        btn.dataset.value = v;
+        btn.setAttribute("aria-pressed", String(state.fixed[b.key][field.sub] === v));
+        btn.addEventListener("click", function(){
+          state.fixed[b.key][field.sub] = v;
+          saveState(); render();
+        });
+        row.appendChild(btn);
       });
-      fixedDials[b.key][field.sub] = dial;
+      group.appendChild(row);
+      dialsRow.appendChild(group);
+      fixedPresetRows[b.key][field.sub] = row;
     });
   });
 
