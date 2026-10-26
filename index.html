@@ -459,6 +459,16 @@
         <button class="link-btn" id="openHistory">きろくを みる ▸</button>
       </section>
 
+      <section class="card">
+        <h2>1にちの ながれ</h2>
+        <p class="hint">がっこう・すいみんなどと、じゆうな じかんが いつ あるか みてみよう</p>
+        <div class="dayline-bar" id="daylineBar"></div>
+        <div class="dayline-ticks">
+          <span>0じ</span><span>6じ</span><span>12じ</span><span>18じ</span><span>24じ</span>
+        </div>
+        <ul class="legend" id="daylineLegend"></ul>
+      </section>
+
       <button class="fixed-toggle" id="toggleFixed" aria-expanded="false" aria-controls="fixedCard">がっこう・すいみんなど： - ▾</button>
       <section class="card" id="fixedCard" hidden>
         <h2>がっこう・すいみんなどの じかん</h2>
@@ -524,18 +534,6 @@
         <div class="suggest-grid" id="suggestGrid"></div>
       </section>
     </section>
-
-    <section class="tab-panel" data-panel="dayline" id="panel-dayline" hidden>
-      <section class="card">
-        <h2>1にちの ながれ</h2>
-        <p class="hint">がっこう・すいみんなどと、じゆうな じかんが いつ あるか みてみよう</p>
-        <div class="dayline-bar" id="daylineBar"></div>
-        <div class="dayline-ticks">
-          <span>0じ</span><span>6じ</span><span>12じ</span><span>18じ</span><span>24じ</span>
-        </div>
-        <ul class="legend" id="daylineLegend"></ul>
-      </section>
-    </section>
   </main>
 
   <nav class="tabbar" aria-label="がめんの きりかえ">
@@ -555,10 +553,6 @@
       <button class="tab-btn" data-tab="play" role="tab" aria-selected="false" aria-controls="panel-play">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 2l3 6 6 .9-4.5 4.3 1.1 6-5.6-3-5.6 3 1.1-6L3 8.9 9 8z"/></svg>
         あそび
-      </button>
-      <button class="tab-btn" data-tab="dayline" role="tab" aria-selected="false" aria-controls="panel-dayline">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="9" width="20" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><line x1="8.5" y1="9" x2="8.5" y2="15" stroke="currentColor" stroke-width="2"/><line x1="15.5" y1="9" x2="15.5" y2="15" stroke="currentColor" stroke-width="2"/></svg>
-        いちにち
       </button>
     </div>
   </nav>
@@ -1827,8 +1821,7 @@
     today: document.getElementById("panel-today"),
     oneoff: document.getElementById("panel-oneoff"),
     routine: document.getElementById("panel-routine"),
-    play: document.getElementById("panel-play"),
-    dayline: document.getElementById("panel-dayline")
+    play: document.getElementById("panel-play")
   };
   // elements render() touches on every single invocation: looked up once here (like
   // tabButtons/panels above) instead of re-querying the DOM on every render().
