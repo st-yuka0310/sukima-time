@@ -1188,6 +1188,12 @@
     var min = opts.min || 0;
     var max = opts.max;
     var step = opts.step || 5;
+    // how many degrees of the circle the [min,max] range spans; the remaining 360-sweep
+    // degrees become a visible, non-interactive gap at the top of the circle (a physical
+    // "stop", like a volume knob) so min (angle 0) and max (angle sweep) never land on the
+    // same screen position. Default 360 keeps today's seamless full-circle behavior for any
+    // caller that doesn't pass it.
+    var sweep = opts.sweep || 360;
     var format = opts.format || function(v){ return String(v); };
     var tickFormat = opts.tickFormat || function(v){ return String(Math.round(v)); };
     var tickValues = opts.ticks || [min, min+(max-min)*0.25, min+(max-min)*0.5, min+(max-min)*0.75];
@@ -1197,7 +1203,7 @@
     root.innerHTML =
       '<div class="dial-visual">' +
         '<svg viewBox="0 0 160 160" class="dial-svg" aria-hidden="true">' +
-          '<circle cx="80" cy="80" r="58" fill="none" stroke="var(--border)" stroke-width="12"/>' +
+          '<path class="dial-track" fill="var(--border)" d="' + arcPath(80,80,64,52,0,sweep) + '"/>' +
           '<path class="dial-fill" fill="var(--accent)"/>' +
           '<g class="dial-ticks"></g>' +
           '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
@@ -1219,9 +1225,11 @@
 
     tickValues.forEach(function(tv){
       var v = (tv && typeof tv === "object") ? tv.value : tv;
-      if(v === max && min !== max) return; // avoid drawing on top of the min tick at angle 0/360
+      // with sweep<360 there's a real visible gap separating the min/max tick positions, so
+      // this skip is only needed (and only correct) for the full-circle case.
+      if(sweep >= 360 && v === max && min !== max) return; // avoid drawing on top of the min tick at angle 0/360
       var label = (tv && typeof tv === "object") ? tv.label : tickFormat(v);
-      var ang = ((v-min)/(max-min))*360;
+      var ang = ((v-min)/(max-min))*sweep;
       var p = polar(cx, cy, rTrack+16, ang);
       var t = document.createElementNS(svgNS, "text");
       t.setAttribute("x", p.x); t.setAttribute("y", p.y+3);
@@ -1234,7 +1242,7 @@
     var onChangeCb = null;
 
     function renderVisual(){
-      var ang = ((value-min)/(max-min))*360;
+      var ang = ((value-min)/(max-min))*sweep;
       var p = polar(cx, cy, rTrack, ang);
       handle.setAttribute("cx", p.x); handle.setAttribute("cy", p.y);
       fillPath.setAttribute("d", value <= min ? "" : arcPath(cx,cy,rTrack+6,rTrack-6,0,ang));
@@ -1251,7 +1259,16 @@
       var ny = (clientY - cyPix) / (rect.height/2);
       var deg = Math.atan2(ny, nx)*180/Math.PI + 90;
       if(deg < 0) deg += 360;
-      var raw = min + (deg/360)*(max-min);
+      var raw;
+      if(deg <= sweep){
+        // inside the live range: map normally.
+        raw = min + (deg/sweep)*(max-min);
+      } else {
+        // inside the gap: clamp to whichever end of the gap is angularly closer, so an
+        // overshooting drag can never wrap around to the opposite extreme.
+        var gapMid = (sweep + 360) / 2;
+        raw = (deg < gapMid) ? max : min;
+      }
       var snapped = snapToStep(raw, min, step);
       return clamp(snapped, min, max);
     }
@@ -1933,7 +1950,7 @@
 
   // ---- today's one-off task form ("そのひ" タブ) -----------------------------
 
-  var taskDial = buildDial("taskDial", {max:240, format:formatMinutes});
+  var taskDial = buildDial("taskDial", {max:240, format:formatMinutes, sweep:300});
   taskDial.onChange(function(){ /* value already committed on release */ });
 
   document.getElementById("toggleTable").addEventListener("click", function(){
@@ -1977,7 +1994,7 @@
   var presetModalName = document.getElementById("presetModalName");
   var presetModalError = document.getElementById("presetModalError");
   var presetModalConfirmBtn = document.getElementById("presetModalConfirm");
-  var presetModalDial = buildDial("presetModalDial", {max:240, format:formatMinutes});
+  var presetModalDial = buildDial("presetModalDial", {max:240, format:formatMinutes, sweep:300});
   var modalPendingName = null;
   var modalOpenerEl = null;
 
