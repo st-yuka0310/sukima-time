@@ -454,12 +454,8 @@
             <span>なにをする？</span>
             <input type="text" id="taskName" placeholder="れい：ピアノの れんしゅう" maxlength="20">
           </label>
-          <div class="field">
-            <span>どのくらい？</span>
-            <div class="dial-wrap" id="taskDial"></div>
-          </div>
           <p class="field-error" id="formError" role="alert"></p>
-          <button type="submit" class="btn btn-accent">＋ きょうに ついかする</button>
+          <button type="submit" class="btn btn-accent">じかんを えらぶ ▸</button>
         </form>
         <p class="hint">リストに ないときだけ、ここから にゅうりょくしてね</p>
       </section>
@@ -1656,8 +1652,8 @@
 
   // ---- today's one-off task form ("そのひ" タブ) -----------------------------
 
-  var taskDial = buildDial("taskDial", {max:240, format:formatMinutes});
-  taskDial.onChange(function(){ /* value already committed on release */ });
+  var taskSubmitBtn = document.querySelector('#taskForm button[type="submit"]');
+  
 
   document.getElementById("toggleTable").addEventListener("click", function(){
     var wrap = document.getElementById("tableWrap");
@@ -1687,12 +1683,8 @@
     var name = nameInput.value.trim().slice(0, 20);
     var errorEl = document.getElementById("formError");
     if(!name){ errorEl.textContent = "なにを するか かいてね"; return; }
-    if(!taskDial.get()){ errorEl.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
     errorEl.textContent = "";
-    var minutes = taskDial.get();
-    nameInput.value = "";
-    taskDial.set(0);
-    addVariableTask(name, minutes);
+    openPresetModal(name, taskSubmitBtn);
   });
 
   var presetGrid = document.getElementById("presetGrid");
@@ -1735,8 +1727,10 @@
     // card button lives in panel-oneoff). Run it BEFORE closePresetModal() so that function's
     // focus-restore guard sees the opener's post-tab-switch visibility, not its stale
     // pre-switch visibility.
+    var fromForm = (modalOpenerEl === taskSubmitBtn);
     addVariableTask(name, minutes);
     closePresetModal();
+    if(fromForm) document.getElementById("taskName").value = "";
   });
 
   PRESET_TASKS.forEach(function(preset){
