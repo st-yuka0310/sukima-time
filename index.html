@@ -158,12 +158,19 @@
   }
   .tab-panels{ display:flex; flex-direction:column; gap:16px; }
 
-  /* fixed day blocks: name+dot on the left, a small dial on the right */
-  .fixed-list{ display:flex; flex-direction:column; gap:16px; }
-  .fixed-row{ display:flex; align-items:center; gap:12px; }
-  .fixed-row-head{ display:flex; align-items:center; gap:8px; flex:1 1 auto; min-width:0; }
+  /* fixed day blocks: name+dot header, then a small row of clock-face/duration dials
+     (2 per block: start+end for school/sleep, start+length for other) */
+  .fixed-list{ display:flex; flex-direction:column; gap:20px; }
+  .fixed-block{ display:flex; flex-direction:column; gap:10px; }
+  .fixed-block + .fixed-block{ border-top:1px solid var(--border); padding-top:20px; }
+  .fixed-block-head{ display:flex; align-items:center; gap:8px; min-width:0; }
   .fixed-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
   .fixed-name{ font-size:.88rem; font-weight:700; min-width:0; overflow-wrap:anywhere; }
+  .fixed-dials{ display:flex; justify-content:center; flex-wrap:wrap; gap:16px; }
+  .fixed-dial-group{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .fixed-dial-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); text-align:center; }
+  .fixed-block-total{ margin:0; font-size:.8rem; color:var(--ink-soft); text-align:center; }
+  .fixed-block-total strong{ color:var(--ink); }
   .fixed-total{
     display:flex; justify-content:space-between; font-size:.82rem; color:var(--ink-soft);
     border-top:1px solid var(--border); padding-top:16px;
@@ -596,20 +603,66 @@
   var DAY_MINUTES = 1440;
   var WEEKDAY_NAMES = ["日","月","火","水","木","金","土"]; // index matches Date#getDay()
 
+  // each block now stores a time-of-day start (+ end, or + a plain length for "other"),
+  // never a flat duration directly — see fixedBlockDuration() below for how the duration
+  // used by fixedSum/freeTotal is derived from these fields.
   var FIXED_BLOCKS = [
-    {key:"school", name:"がっこう",         min:0,   max:600, colorVar:"--fixed-school",
-      ticks:[{value:0,label:"0"},{value:180,label:"3"},{value:360,label:"6"},{value:540,label:"9"}]},
-    {key:"other",  name:"ごはん・おふろ など", min:0,   max:240, colorVar:"--fixed-other",
-      ticks:[{value:0,label:"0"},{value:60,label:"1"},{value:120,label:"2"},{value:180,label:"3"}]},
-    {key:"sleep",  name:"すいみん",         min:300, max:660, colorVar:"--fixed-sleep",
-      ticks:[{value:300,label:"5"},{value:420,label:"7"},{value:540,label:"9"}]}
+    {key:"school", name:"がっこう",            colorVar:"--fixed-school",
+      fields:[
+        {sub:"start", name:"がっこうが はじまる"},
+        {sub:"end",   name:"がっこうが おわる"}
+      ]},
+    {key:"other",  name:"ごはん・おふろ など", colorVar:"--fixed-other",
+      fields:[
+        {sub:"start",  name:"はじまる じかん"},
+        {sub:"length", name:"どれくらい"}
+      ]},
+    {key:"sleep",  name:"すいみん",            colorVar:"--fixed-sleep",
+      fields:[
+        {sub:"start", name:"ねる じかん"},
+        {sub:"end",   name:"おきる じかん"}
+      ]}
   ];
-  var FIXED_DIAL_STEP = 15; // matches the step passed to buildDial() for every fixed-block dial below
+  // defaults for state.fixed: start/end/length are all minutes-since-midnight.
+  var FIXED_DEFAULTS = {
+    school: {start:480,  end:900},   // 8:00 -> 15:00
+    sleep:  {start:1260, end:390},   // 21:00 -> 6:30 (wraps past midnight)
+    other:  {start:960,  length:60}  // 16:00, for 1じかん
+  };
+  // clock-face dial (time-of-day): min:0, max:1439 so 0:00/24:00 share one screen position,
+  // which is correct for a real 24h clock (unlike buildDial()'s usual tick-skip-at-max guard,
+  // meant to avoid a duplicate label — nothing here is ever configured at exactly 1439).
+  var TIME_DIAL_STEP = 10;
+  var TIME_DIAL_TICKS = [
+    {value:0,    label:"0じ"},
+    {value:360,  label:"6じ"},
+    {value:720,  label:"12じ"},
+    {value:1080, label:"18じ"}
+  ];
+  // "other"'s length dial reuses the exact range/step of the existing task-duration dials
+  // (taskDial/presetModalDial below), not a new range.
+  var OTHER_LENGTH_MAX = 240;
+  var OTHER_LENGTH_STEP = 5;
+  // each block's own total duration is now derived from start/end (or start/length), never
+  // stored directly: school/other are same-day subtraction, sleep wraps past midnight.
+  function fixedBlockDuration(key, fixed){
+    var f = fixed[key];
+    if(key === "sleep"){
+      var d = f.end - f.start;
+      if(d <= 0) d += DAY_MINUTES;
+      return d;
+    }
+    if(key === "other") return f.length;
+    return Math.max(0, f.end - f.start);
+  }
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
   // shared with buildDial()'s dial.set(), so a stored value snaps to the exact same grid
   // the dial itself would produce for that same input.
   function snapToStep(raw, min, step){ return Math.round((raw-min)/step)*step + min; }
+  // shallow clone of a FIXED_DEFAULTS[key] object — used whenever a default is written into
+  // state so state can never alias (and later mutate) the shared default object itself.
+  function shallowClone(obj){ var out = {}; for(var k in obj){ out[k] = obj[k]; } return out; }
   // Single source of truth for validating a numeric value pulled out of parsed JSON (localStorage
   // can contain NaN/Infinity after corruption or tampering, and JSON.parse happily round-trips
   // neither as a plain "number" typeof check would catch — both need the isFinite check too).
@@ -770,7 +823,11 @@
 
   function loadState(){
     var fallback = {
-      fixed: {sleep:540, school:480, other:90},
+      fixed: {
+        school: shallowClone(FIXED_DEFAULTS.school),
+        sleep:  shallowClone(FIXED_DEFAULTS.sleep),
+        other:  shallowClone(FIXED_DEFAULTS.other)
+      },
       routines: [
         {id:"routine-seed-1", name:"しゅくだい", weekdays:[0,1,2,3,4,5,6]}
       ],
@@ -796,12 +853,32 @@
         // of keeping a permanently "dead" routine with no explanation in the UI.
         return r.weekdays.length > 0;
       });
-      if(!parsed.fixed || typeof parsed.fixed !== "object") parsed.fixed = fallback.fixed;
+      if(!parsed.fixed || typeof parsed.fixed !== "object" || Array.isArray(parsed.fixed)) parsed.fixed = {};
+      // each block's stored value is now {start,end} or {start,length} (minutes since
+      // midnight), not a single flat duration number. A legacy flat-number save (from before
+      // this change), a missing block, or any sub-field that fails validation resets that
+      // whole block to its default object — there's no reliable way to guess a start/end
+      // range from an old duration, so this mirrors how other unrecoverable cases here just
+      // fall back to a default instead of trying to salvage partial data.
       FIXED_BLOCKS.forEach(function(b){
-        parsed.fixed[b.key] = sanitizeNumber(parsed.fixed[b.key], fallback.fixed[b.key]);
-        // snap to the same step grid buildDial()'s dial.set() snaps to, then clamp — otherwise
-        // the dial's displayed (snapped) value could permanently disagree with this stored value.
-        parsed.fixed[b.key] = clamp(snapToStep(parsed.fixed[b.key], b.min, FIXED_DIAL_STEP), b.min, b.max);
+        var v = parsed.fixed[b.key];
+        var valid = !!(v && typeof v === "object" && !Array.isArray(v));
+        var next = {};
+        if(valid){
+          b.fields.forEach(function(field){
+            var sub = field.sub;
+            var isLength = (sub === "length");
+            var checked = sanitizeNumber(v[sub], NaN, {integer:true, min:0, max: isLength ? DAY_MINUTES : 1439});
+            if(!isFinite(checked)){ valid = false; return; }
+            // snap to the same step grid buildDial()'s dial.set() snaps to, then clamp —
+            // otherwise the dial's displayed (snapped) value could permanently disagree
+            // with this stored value.
+            next[sub] = isLength
+              ? clamp(snapToStep(checked, 0, OTHER_LENGTH_STEP), 0, OTHER_LENGTH_MAX)
+              : clamp(snapToStep(checked, 0, TIME_DIAL_STEP), 0, 1439);
+          });
+        }
+        parsed.fixed[b.key] = valid ? next : shallowClone(FIXED_DEFAULTS[b.key]);
       });
       parsed.stars = sanitizeNumber(parsed.stars, 0, {integer: true});
       parsed.stars = Math.max(0, parsed.stars);
@@ -947,6 +1024,14 @@
     totalSeconds = Math.max(0, Math.round(totalSeconds));
     var m = Math.floor(totalSeconds/60), s = totalSeconds%60;
     return m + ":" + (s < 10 ? "0"+s : s);
+  }
+
+  // renders a minutes-since-midnight value as "H:MM" (390 -> "6:30", 1260 -> "21:00"); used
+  // as the clock-face time-of-day dials' center-value format.
+  function formatTimeOfDay(totalMinutes){
+    var total = ((Math.round(totalMinutes) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+    var h = Math.floor(total/60), m = total%60;
+    return h + ":" + pad2(m);
   }
 
   function showToast(message){
@@ -1209,7 +1294,7 @@
   function render(){
     ensureToday();
     var tasks = state.day.tasks;
-    var fixedSum = FIXED_BLOCKS.reduce(function(a,b){ return a + state.fixed[b.key]; }, 0);
+    var fixedSum = FIXED_BLOCKS.reduce(function(a,b){ return a + fixedBlockDuration(b.key, state.fixed); }, 0);
     // today's free-time budget: 24h minus school/sleep/meals. The chart below only ever
     // shows what happens inside this budget, never the fixed blocks that produced it.
     var freeTotal = Math.max(0, DAY_MINUTES - fixedSum);
@@ -1226,7 +1311,14 @@
     wdLabelEl.textContent = "きょうは " + WEEKDAY_NAMES[wd] + "ようび";
     wdLabelEl.style.color = weekdayColorVar(wd);
 
-    FIXED_BLOCKS.forEach(function(b){ if(!fixedDials[b.key].isDragging() && fixedDials[b.key].get() !== state.fixed[b.key]) fixedDials[b.key].set(state.fixed[b.key]); });
+    FIXED_BLOCKS.forEach(function(b){
+      b.fields.forEach(function(field){
+        var dial = fixedDials[b.key][field.sub];
+        var v = state.fixed[b.key][field.sub];
+        if(!dial.isDragging() && dial.get() !== v) dial.set(v);
+      });
+      fixedBlockTotalEls[b.key].textContent = "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed));
+    });
     fixedTotalEl.textContent = formatMinutes(fixedSum);
     fixedCardEl.hidden = !fixedCardExpanded;
     toggleFixedEl.setAttribute("aria-expanded", String(fixedCardExpanded));
@@ -1625,33 +1717,57 @@
   });
 
   var fixedDials = {};
+  var fixedBlockTotalEls = {};
   var fixedListEl = document.getElementById("fixedList");
   FIXED_BLOCKS.forEach(function(b){
-    var row = document.createElement("div");
-    row.className = "fixed-row";
+    var block = document.createElement("div");
+    block.className = "fixed-block";
+
     var head = document.createElement("div");
-    head.className = "fixed-row-head";
+    head.className = "fixed-block-head";
     var dot = makeDot("fixed-dot", "var(" + b.colorVar + ")");
     var name = document.createElement("span");
     name.className = "fixed-name";
     name.textContent = b.name;
     head.appendChild(dot); head.appendChild(name);
-    var dialWrap = document.createElement("div");
-    dialWrap.className = "dial-wrap dial-sm";
-    dialWrap.id = "fixedDial-" + b.key;
-    row.appendChild(head); row.appendChild(dialWrap);
-    fixedListEl.appendChild(row);
+    block.appendChild(head);
 
-    var dial = buildDial(dialWrap.id, {
-      min:b.min, max:b.max, step:FIXED_DIAL_STEP, format:formatMinutes,
-      ticks: b.ticks
+    var dialsRow = document.createElement("div");
+    dialsRow.className = "fixed-dials";
+    block.appendChild(dialsRow);
+
+    var totalEl = document.createElement("p");
+    totalEl.className = "fixed-block-total";
+    block.appendChild(totalEl);
+    fixedBlockTotalEls[b.key] = totalEl;
+
+    fixedListEl.appendChild(block);
+
+    fixedDials[b.key] = {};
+    b.fields.forEach(function(field){
+      var group = document.createElement("div");
+      group.className = "fixed-dial-group";
+      var label = document.createElement("span");
+      label.className = "fixed-dial-label";
+      label.textContent = field.name;
+      var dialWrap = document.createElement("div");
+      dialWrap.className = "dial-wrap dial-sm";
+      dialWrap.id = "fixedDial-" + b.key + "-" + field.sub;
+      group.appendChild(label); group.appendChild(dialWrap);
+      dialsRow.appendChild(group);
+
+      // "length" (other's duration) reuses the plain duration dial; start/end are
+      // 24h clock-face dials (see TIME_DIAL_STEP/TIME_DIAL_TICKS above).
+      var dial = (field.sub === "length")
+        ? buildDial(dialWrap.id, {max:OTHER_LENGTH_MAX, step:OTHER_LENGTH_STEP, format:formatMinutes})
+        : buildDial(dialWrap.id, {min:0, max:1439, step:TIME_DIAL_STEP, format:formatTimeOfDay, tickFormat:formatTimeOfDay, ticks:TIME_DIAL_TICKS});
+      dial.set(state.fixed[b.key][field.sub]);
+      dial.onChange(function(v){
+        state.fixed[b.key][field.sub] = v;
+        saveState(); render();
+      });
+      fixedDials[b.key][field.sub] = dial;
     });
-    dial.set(state.fixed[b.key]);
-    dial.onChange(function(v){
-      state.fixed[b.key] = v;
-      saveState(); render();
-    });
-    fixedDials[b.key] = dial;
   });
 
   // ---- today's one-off task form ("そのひ" タブ) -----------------------------
