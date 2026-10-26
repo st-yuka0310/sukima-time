@@ -262,7 +262,7 @@
   }
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
-  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible,
+  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible,
   .fixed-toggle:focus-visible, .fixed-preset-btn:focus-visible,
   .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
@@ -336,30 +336,40 @@
   .help-body h3{ margin:0 0 4px; font-size:.92rem; font-weight:700; }
   .help-body p{ margin:0; font-size:.83rem; color:var(--ink-soft); line-height:1.6; }
 
-  /* duration / time dial: drag or tap around the ring; release commits the value.
-     The circle only ever shows the value; the +/- nudge buttons live in their own
-     row underneath so a long label (e.g. "1じかん30ぷん") never has to share the
-     cramped space inside the ring with a button. */
-  .dial-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; width:150px; margin:8px auto 0; flex:0 0 auto; }
-  .dial-visual{ position:relative; width:100%; aspect-ratio:1/1; }
-  .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
-  .dial-center{
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    pointer-events:none; padding:0 22px; text-align:center;
+  /* duration wheel picker: iPhone-alarm-style scrolling wheels (hours + minutes), built from
+     scratch with CSS scroll-snap doing the physics — no native <input>, so the look stays
+     consistent across browsers/platforms. One ".wheel" = one vertically-scrolling column;
+     see buildWheel()/buildDurationPicker() in the script for the markup it injects. The
+     container is tall enough for 3 rows (one centered/selected + one row above/below), with
+     its own scrollbar hidden since the snap + highlight band already communicate the
+     interaction. Top/bottom ".wheel-pad" spacers are exactly one row tall so the first/last
+     real item can still scroll to dead-center (see buildWheel()'s comment for the math). */
+  .wheel-pair{ display:flex; justify-content:center; align-items:flex-start; gap:28px; margin:8px auto 0; flex:0 0 auto; }
+  .wheel-col{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .wheel-col-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); }
+  .wheel{
+    position:relative; width:84px; height:144px; overflow-y:scroll; scroll-snap-type:y mandatory;
+    scrollbar-width:none; -ms-overflow-style:none; border-radius:14px; background:var(--bg);
+    border:1px solid var(--border);
   }
-  .dial-value{
-    font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
-    font-variant-numeric: tabular-nums; color: var(--ink);
+  .wheel::-webkit-scrollbar{ display:none; }
+  .wheel-track{ display:flex; flex-direction:column; }
+  .wheel-pad{ height:48px; flex:0 0 auto; }
+  .wheel-item{
+    height:48px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    scroll-snap-align:center; font-family:"Zen Maru Gothic",sans-serif; font-weight:700;
+    font-size:1.3rem; color:var(--ink); opacity:.45; cursor:pointer;
+    font-variant-numeric: tabular-nums; user-select:none;
   }
-  .dial-nudge-row{ display:flex; align-items:center; justify-content:center; gap:20px; }
-  /* tap-only fine adjustment: no keyboard, nudges by the dial's own snap step */
-  .dial-nudge-btn{
-    flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:none;
-    background: var(--accent-soft); color: var(--accent); font-size:1.05rem; font-weight:700;
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  /* kept in sync with scroll position by buildWheel()'s scroll handler, not CSS alone, so the
+     centered row always reads clearly against the two faded rows above/below it. */
+  .wheel-item.is-center{ opacity:1; font-weight:900; }
+  /* purely visual "this is the selected row" band, matching one item's height, centered in
+     the wheel container. */
+  .wheel-highlight{
+    position:absolute; left:0; right:0; top:48px; height:48px; border-radius:10px;
+    background:var(--accent-soft); border:1.5px solid var(--accent); pointer-events:none;
   }
-  .dial-nudge-btn:active{ transform: scale(.9); }
-  .dial-nudge-btn:disabled{ opacity:.4; cursor:default; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -505,7 +515,7 @@
           </label>
           <div class="field">
             <span>どのくらい？</span>
-            <div class="dial-wrap" id="taskDial"></div>
+            <div class="wheel-pair" id="taskDial"></div>
           </div>
           <p class="field-error" id="formError" role="alert"></p>
           <button type="submit" class="btn btn-accent">＋ きょうに ついかする</button>
@@ -572,7 +582,7 @@
       </div>
       <div class="field">
         <span>どのくらい？</span>
-        <div class="dial-wrap" id="presetModalDial"></div>
+        <div class="wheel-pair" id="presetModalDial"></div>
       </div>
       <p class="field-error" id="presetModalError" role="alert"></p>
       <button type="button" class="btn btn-accent" id="presetModalConfirm">＋ ついかする</button>
@@ -751,8 +761,9 @@
   }
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
-  // shared with buildDial()'s dial.set(), so a stored value snaps to the exact same grid
-  // the dial itself would produce for that same input.
+  // generic snap-to-grid helper, shared by loadState()'s fixed-block sanitizers and the
+  // duration wheel picker's set(), so a stored/seeded value lands on the exact same grid
+  // the live control itself would produce for that same input.
   function snapToStep(raw, min, step){ return Math.round((raw-min)/step)*step + min; }
   // shallow clone of a FIXED_DEFAULTS[key] object — used whenever a default is written into
   // state so state can never alias (and later mutate) the shared default object itself.
@@ -1178,152 +1189,129 @@
     return dot;
   }
 
-  // ---- dial: drag or tap around the ring to set a value within [min,max] ----
-  // Visual feedback is instant on every move; the value is only committed
-  // (onChange fires, which saves + re-renders the app) when the finger lifts,
-  // so a drag never rebuilds the rest of the page mid-gesture.
+  // ---- wheel picker: iPhone-alarm-style vertically-scrolling wheel --------
+  // One ".wheel" = one CSS scroll-snap column (no native <input>, so the look stays
+  // consistent across browsers/platforms, and the browser's own scroll physics do the
+  // heavy lifting instead of hand-rolled drag tracking). ITEM_HEIGHT must match the
+  // ".wheel-item"/".wheel-pad" CSS height (48px) exactly, since every position below is
+  // computed from it rather than measured from the DOM.
+  //
+  // Why "scrollTop = index * ITEM_HEIGHT" centers that item regardless of the container's
+  // height H or the pad height P: with P chosen as (H - ITEM_HEIGHT)/2 (see CSS), the
+  // container's vertical center sits at contentOffset = scrollTop + H/2, and item i's own
+  // center sits at contentOffset = P + i*ITEM_HEIGHT + ITEM_HEIGHT/2. Setting those equal and
+  // substituting P cancels every H/ITEM_HEIGHT term down to scrollTop = i*ITEM_HEIGHT.
+  var WHEEL_ITEM_HEIGHT = 48;
 
-  function buildDial(containerId, opts){
+  function buildWheel(containerId, values, opts){
     opts = opts || {};
-    var min = opts.min || 0;
-    var max = opts.max;
-    var step = opts.step || 5;
-    // how many degrees of the circle the [min,max] range spans; the remaining 360-sweep
-    // degrees become a visible, non-interactive gap at the top of the circle (a physical
-    // "stop", like a volume knob) so min (angle 0) and max (angle sweep) never land on the
-    // same screen position. Default 360 keeps today's seamless full-circle behavior for any
-    // caller that doesn't pass it.
-    var sweep = opts.sweep || 360;
     var format = opts.format || function(v){ return String(v); };
-    var tickFormat = opts.tickFormat || function(v){ return String(Math.round(v)); };
-    var tickValues = opts.ticks || [min, min+(max-min)*0.25, min+(max-min)*0.5, min+(max-min)*0.75];
+    var onChangeCb = opts.onChange || null;
 
-    var svgNS = "http://www.w3.org/2000/svg";
     var root = document.getElementById(containerId);
     root.innerHTML =
-      '<div class="dial-visual">' +
-        '<svg viewBox="0 0 160 160" class="dial-svg" aria-hidden="true">' +
-          '<path class="dial-track" fill="var(--border)" d="' + arcPath(80,80,64,52,0,sweep) + '"/>' +
-          '<path class="dial-fill" fill="var(--accent)"/>' +
-          '<g class="dial-ticks"></g>' +
-          '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
-        '</svg>' +
-        '<div class="dial-center"><div class="dial-value">0</div></div>' +
+      '<div class="wheel-track">' +
+        '<div class="wheel-pad"></div>' +
+        values.map(function(v){
+          return '<div class="wheel-item" data-value="' + v + '">' + format(v) + '</div>';
+        }).join('') +
+        '<div class="wheel-pad"></div>' +
       '</div>' +
-      '<div class="dial-nudge-row">' +
-        '<button type="button" class="dial-nudge-btn" aria-label="すこし へらす">−</button>' +
-        '<button type="button" class="dial-nudge-btn" aria-label="すこし ふやす">＋</button>' +
-      '</div>';
-    var svg = root.querySelector(".dial-svg");
-    var fillPath = root.querySelector(".dial-fill");
-    var handle = root.querySelector(".dial-handle");
-    var valueEl = root.querySelector(".dial-value");
-    var nudgeBtns = root.querySelectorAll(".dial-nudge-btn");
-    var nudgeDown = nudgeBtns[0], nudgeUp = nudgeBtns[1];
-    var ticksG = root.querySelector(".dial-ticks");
-    var cx = 80, cy = 80, rTrack = 58;
+      '<div class="wheel-highlight" aria-hidden="true"></div>';
+    var items = Array.prototype.slice.call(root.querySelectorAll(".wheel-item"));
 
-    tickValues.forEach(function(tv){
-      var v = (tv && typeof tv === "object") ? tv.value : tv;
-      // with sweep<360 there's a real visible gap separating the min/max tick positions, so
-      // this skip is only needed (and only correct) for the full-circle case.
-      if(sweep >= 360 && v === max && min !== max) return; // avoid drawing on top of the min tick at angle 0/360
-      var label = (tv && typeof tv === "object") ? tv.label : tickFormat(v);
-      var ang = ((v-min)/(max-min))*sweep;
-      var p = polar(cx, cy, rTrack+16, ang);
-      var t = document.createElementNS(svgNS, "text");
-      t.setAttribute("x", p.x); t.setAttribute("y", p.y+3);
-      t.setAttribute("text-anchor","middle"); t.setAttribute("font-size","9"); t.setAttribute("fill","var(--muted)");
-      t.textContent = label;
-      ticksG.appendChild(t);
+    var settledIndex = 0;
+    var debounceHandle = null;
+
+    function clampIndex(i){ return Math.max(0, Math.min(values.length-1, i)); }
+    function nearestIndex(){ return clampIndex(Math.round(root.scrollTop / WHEEL_ITEM_HEIGHT)); }
+
+    // live visual feedback on every scroll tick (not debounced): keeps the row nearest
+    // center reading as the "selected" one while the wheel is still moving.
+    function paintCenter(idx){
+      items.forEach(function(item, i){ item.classList.toggle("is-center", i === idx); });
+    }
+
+    function settle(){
+      var idx = nearestIndex();
+      paintCenter(idx);
+      if(idx !== settledIndex){
+        settledIndex = idx;
+        if(onChangeCb) onChangeCb(values[settledIndex]);
+      }
+    }
+
+    root.addEventListener("scroll", function(){
+      paintCenter(nearestIndex());
+      if(debounceHandle) clearTimeout(debounceHandle);
+      // fires once ~120ms after scrolling actually stops; this debounce (not `scrollend`
+      // alone) is what settles the value, since `scrollend` isn't universally supported yet.
+      debounceHandle = setTimeout(settle, 120);
+    });
+    // complementary fast path where supported — harmless to also run the debounce path above.
+    root.addEventListener("scrollend", function(){
+      if(debounceHandle){ clearTimeout(debounceHandle); debounceHandle = null; }
+      settle();
     });
 
-    var value = min;
+    // tappable rows: tapping a non-centered item smoothly scrolls it to center, as an
+    // alternative to dragging.
+    items.forEach(function(item, i){
+      item.addEventListener("click", function(){
+        root.scrollTo({ top: i * WHEEL_ITEM_HEIGHT, behavior: "smooth" });
+      });
+    });
+
+    paintCenter(settledIndex);
+    return {
+      get: function(){ return values[settledIndex]; },
+      set: function(v){
+        var idx = values.indexOf(v);
+        if(idx === -1) idx = 0;
+        settledIndex = idx;
+        root.scrollTop = idx * WHEEL_ITEM_HEIGHT; // instant: no smooth animation for programmatic sync
+        paintCenter(idx);
+      },
+      onChange: function(cb){ onChangeCb = cb; }
+    };
+  }
+
+  // Combines an hours wheel (0-4) and a quarter-hour minutes wheel (0/15/30/45) into one
+  // "total minutes" duration control — the two-wheel replacement for the old circular dial
+  // at the taskDial/presetModalDial call sites. Renders both wheels into wrapperId's own
+  // container (mirroring buildDial()'s old convention of owning containerId.innerHTML).
+  function buildDurationPicker(wrapperId){
+    var wrapper = document.getElementById(wrapperId);
+    wrapper.innerHTML =
+      '<div class="wheel-col">' +
+        '<span class="wheel-col-label">じかん</span>' +
+        '<div class="wheel" id="' + wrapperId + '-hours"></div>' +
+      '</div>' +
+      '<div class="wheel-col">' +
+        '<span class="wheel-col-label">ふん</span>' +
+        '<div class="wheel" id="' + wrapperId + '-minutes"></div>' +
+      '</div>';
+
+    var hoursWheel = buildWheel(wrapperId + "-hours", [0,1,2,3,4]);
+    var minutesWheel = buildWheel(wrapperId + "-minutes", [0,15,30,45]);
     var onChangeCb = null;
 
-    function renderVisual(){
-      var ang = ((value-min)/(max-min))*sweep;
-      var p = polar(cx, cy, rTrack, ang);
-      handle.setAttribute("cx", p.x); handle.setAttribute("cy", p.y);
-      fillPath.setAttribute("d", value <= min ? "" : arcPath(cx,cy,rTrack+6,rTrack-6,0,ang));
-      valueEl.textContent = format(value);
-      nudgeDown.disabled = value <= min;
-      nudgeUp.disabled = value >= max;
-    }
+    function combined(){ return clamp(hoursWheel.get()*60 + minutesWheel.get(), 0, 240); }
+    function notify(){ if(onChangeCb) onChangeCb(combined()); }
+    hoursWheel.onChange(notify);
+    minutesWheel.onChange(notify);
 
-    function valueFromClientPoint(clientX, clientY){
-      var rect = svg.getBoundingClientRect();
-      var cxPix = rect.left + rect.width/2;
-      var cyPix = rect.top + rect.height/2;
-      var nx = (clientX - cxPix) / (rect.width/2);
-      var ny = (clientY - cyPix) / (rect.height/2);
-      var deg = Math.atan2(ny, nx)*180/Math.PI + 90;
-      if(deg < 0) deg += 360;
-      var raw;
-      if(deg <= sweep){
-        // inside the live range: map normally.
-        raw = min + (deg/sweep)*(max-min);
-      } else {
-        // inside the gap: clamp to whichever end of the gap is angularly closer, so an
-        // overshooting drag can never wrap around to the opposite extreme.
-        var gapMid = (sweep + 360) / 2;
-        raw = (deg < gapMid) ? max : min;
-      }
-      var snapped = snapToStep(raw, min, step);
-      return clamp(snapped, min, max);
-    }
-
-    function commit(rawValue){
-      value = clamp(Math.round(rawValue), min, max);
-      renderVisual();
-      if(onChangeCb) onChangeCb(value);
-    }
-
-    var dragging = false;
-    var activePointerId = null;
-    function pointerDown(ev){
-      if(dragging) return;
-      dragging = true;
-      activePointerId = ev.pointerId;
-      value = valueFromClientPoint(ev.clientX, ev.clientY);
-      renderVisual();
-      try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
-    }
-    function pointerMove(ev){
-      if(!dragging || ev.pointerId !== activePointerId) return;
-      value = valueFromClientPoint(ev.clientX, ev.clientY);
-      renderVisual();
-    }
-    function handleDragEnd(ev){
-      if(!dragging || ev.pointerId !== activePointerId) return;
-      dragging = false;
-      activePointerId = null;
-      commit(value);
-    }
-    svg.addEventListener("pointerdown", pointerDown);
-    svg.addEventListener("pointermove", pointerMove);
-    svg.addEventListener("pointerup", handleDragEnd);
-    svg.addEventListener("pointercancel", handleDragEnd);
-    // safety net: if pointer capture is ever lost without a pointerup/pointercancel reaching
-    // us (dropped event, OS-level interruption, etc.), make sure the dial doesn't get stuck.
-    svg.addEventListener("lostpointercapture", handleDragEnd);
-    // extra safety net: if setPointerCapture silently failed/no-opped for this element and
-    // the pointer left the svg's bounds before release, svg-scoped listeners above never
-    // fire; these window-level fallbacks still catch the release (handleDragEnd's own
-    // pointerId/dragging guard keeps this safe to attach broadly, no double-firing).
-    window.addEventListener("pointerup", handleDragEnd);
-    window.addEventListener("pointercancel", handleDragEnd);
-
-    // tap-only fine adjustment, no keyboard: nudges by the same step the dial snaps to
-    nudgeDown.addEventListener("click", function(){ commit(value - step); });
-    nudgeUp.addEventListener("click", function(){ commit(value + step); });
-
-    renderVisual();
     return {
-      get: function(){ return value; },
-      set: function(v){ value = clamp(snapToStep(v, min, step), min, max); renderVisual(); },
-      onChange: function(cb){ onChangeCb = cb; },
-      isDragging: function(){ return dragging; }
+      get: combined,
+      set: function(totalMinutes){
+        totalMinutes = clamp(Math.round(totalMinutes || 0), 0, 240);
+        var h = Math.floor(totalMinutes/60);
+        var m = snapToStep(totalMinutes % 60, 0, 15);
+        if(m >= 60){ m -= 60; h += 1; }
+        hoursWheel.set(clamp(h, 0, 4));
+        minutesWheel.set(m);
+      },
+      onChange: function(cb){ onChangeCb = cb; }
     };
   }
 
@@ -1950,8 +1938,8 @@
 
   // ---- today's one-off task form ("そのひ" タブ) -----------------------------
 
-  var taskDial = buildDial("taskDial", {max:240, format:formatMinutes, sweep:300});
-  taskDial.onChange(function(){ /* value already committed on release */ });
+  var taskDial = buildDurationPicker("taskDial");
+  taskDial.onChange(function(){ /* value already committed when a wheel settles */ });
 
   document.getElementById("toggleTable").addEventListener("click", function(){
     var wrap = document.getElementById("tableWrap");
@@ -1981,7 +1969,7 @@
     var name = nameInput.value.trim().slice(0, 20);
     var errorEl = document.getElementById("formError");
     if(!name){ errorEl.textContent = "なにを するか かいてね"; return; }
-    if(!taskDial.get()){ errorEl.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
+    if(!taskDial.get()){ errorEl.textContent = "じかんを えらんでね"; return; }
     errorEl.textContent = "";
     var minutes = taskDial.get();
     nameInput.value = "";
@@ -1994,7 +1982,7 @@
   var presetModalName = document.getElementById("presetModalName");
   var presetModalError = document.getElementById("presetModalError");
   var presetModalConfirmBtn = document.getElementById("presetModalConfirm");
-  var presetModalDial = buildDial("presetModalDial", {max:240, format:formatMinutes, sweep:300});
+  var presetModalDial = buildDurationPicker("presetModalDial");
   var modalPendingName = null;
   var modalOpenerEl = null;
 
@@ -2023,7 +2011,7 @@
   });
   presetModalConfirmBtn.addEventListener("click", function(){
     ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
-    if(!presetModalDial.get()){ presetModalError.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
+    if(!presetModalDial.get()){ presetModalError.textContent = "じかんを えらんでね"; return; }
     var name = modalPendingName, minutes = presetModalDial.get();
     // addVariableTask() switches to the "today" tab, which may hide the opener (the preset
     // card button lives in panel-oneoff). Run it BEFORE closePresetModal() so that function's
