@@ -163,8 +163,9 @@
   }
   .tab-panels{ display:flex; flex-direction:column; gap:16px; }
 
-  /* fixed day blocks: name+dot header, then a small row of clock-face/duration dials
-     (2 per block: start+end for school/sleep, start+length for other) */
+  /* fixed day blocks: name+dot header, then a small row of tappable preset time/duration
+     buttons per field (2 fields per block: start+end for school/sleep, start+length for
+     other) — see the preset-button-row setup near fixedListEl in the script. */
   .fixed-list{ display:flex; flex-direction:column; gap:20px; }
   .fixed-block{ display:flex; flex-direction:column; gap:10px; }
   .fixed-block + .fixed-block{ border-top:1px solid var(--border); padding-top:20px; }
@@ -172,8 +173,19 @@
   .fixed-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
   .fixed-name{ font-size:.88rem; font-weight:700; min-width:0; overflow-wrap:anywhere; }
   .fixed-dials{ display:flex; justify-content:center; flex-wrap:wrap; gap:16px; }
-  .fixed-dial-group{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .fixed-dial-group{ display:flex; flex-direction:column; align-items:center; gap:6px; max-width:200px; }
   .fixed-dial-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); text-align:center; }
+  /* preset-button row for a single fixed-block field: modeled on .weekday-row/.weekday-chip's
+     persistent-selection pattern (aria-pressed toggles active vs. inactive) rather than the
+     one-shot legend-pending-chips, since a fixed-block value stays selected until re-tapped. */
+  .fixed-preset-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+  .fixed-preset-btn{
+    border:1.5px solid var(--border); background:var(--bg); color:var(--ink);
+    font: inherit; font-weight:700; font-size:.78rem; padding:6px 11px; border-radius:999px;
+    cursor:pointer; font-variant-numeric: tabular-nums;
+  }
+  .fixed-preset-btn[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .fixed-preset-btn:active{ transform: scale(.95); }
   .fixed-block-total{ margin:0; font-size:.8rem; color:var(--ink-soft); text-align:center; }
   .fixed-block-total strong{ color:var(--ink); }
   .fixed-total{
@@ -250,8 +262,8 @@
   }
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
-  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible, .dial-nudge-btn:focus-visible,
-  .fixed-toggle:focus-visible,
+  .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible,
+  .fixed-toggle:focus-visible, .fixed-preset-btn:focus-visible,
   .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
@@ -324,35 +336,40 @@
   .help-body h3{ margin:0 0 4px; font-size:.92rem; font-weight:700; }
   .help-body p{ margin:0; font-size:.83rem; color:var(--ink-soft); line-height:1.6; }
 
-  /* duration / time dial: drag or tap around the ring; release commits the value.
-     The circle only ever shows the value; the +/- nudge buttons live in their own
-     row underneath so a long label (e.g. "1じかん30ぷん") never has to share the
-     cramped space inside the ring with a button. */
-  .dial-wrap{ display:flex; flex-direction:column; align-items:center; gap:10px; width:150px; margin:8px auto 0; flex:0 0 auto; }
-  .dial-wrap.dial-sm{ width:112px; margin:0; gap:8px; }
-  .dial-visual{ position:relative; width:100%; aspect-ratio:1/1; }
-  .dial-svg{ width:100%; height:100%; display:block; touch-action:none; cursor:pointer; overflow:visible; }
-  .dial-center{
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    pointer-events:none; padding:0 22px; text-align:center;
+  /* duration wheel picker: iPhone-alarm-style scrolling wheels (hours + minutes), built from
+     scratch with CSS scroll-snap doing the physics — no native <input>, so the look stays
+     consistent across browsers/platforms. One ".wheel" = one vertically-scrolling column;
+     see buildWheel()/buildDurationPicker() in the script for the markup it injects. The
+     container is tall enough for 3 rows (one centered/selected + one row above/below), with
+     its own scrollbar hidden since the snap + highlight band already communicate the
+     interaction. Top/bottom ".wheel-pad" spacers are exactly one row tall so the first/last
+     real item can still scroll to dead-center (see buildWheel()'s comment for the math). */
+  .wheel-pair{ display:flex; justify-content:center; align-items:flex-start; gap:28px; margin:8px auto 0; flex:0 0 auto; }
+  .wheel-col{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .wheel-col-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); }
+  .wheel{
+    position:relative; width:84px; height:144px; overflow-y:scroll; scroll-snap-type:y mandatory;
+    scrollbar-width:none; -ms-overflow-style:none; border-radius:14px; background:var(--bg);
+    border:1px solid var(--border);
   }
-  .dial-sm .dial-center{ padding:0 16px; }
-  .dial-value{
-    font-family:"Zen Maru Gothic",sans-serif; font-weight:900; font-size:1.05rem; line-height:1.2;
-    font-variant-numeric: tabular-nums; color: var(--ink);
+  .wheel::-webkit-scrollbar{ display:none; }
+  .wheel-track{ display:flex; flex-direction:column; }
+  .wheel-pad{ height:48px; flex:0 0 auto; }
+  .wheel-item{
+    height:48px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    scroll-snap-align:center; font-family:"Zen Maru Gothic",sans-serif; font-weight:700;
+    font-size:1.3rem; color:var(--ink); opacity:.45; cursor:pointer;
+    font-variant-numeric: tabular-nums; user-select:none;
   }
-  .dial-sm .dial-value{ font-size:.86rem; }
-  .dial-nudge-row{ display:flex; align-items:center; justify-content:center; gap:20px; }
-  .dial-sm .dial-nudge-row{ gap:16px; }
-  /* tap-only fine adjustment: no keyboard, nudges by the dial's own snap step */
-  .dial-nudge-btn{
-    flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:none;
-    background: var(--accent-soft); color: var(--accent); font-size:1.05rem; font-weight:700;
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  /* kept in sync with scroll position by buildWheel()'s scroll handler, not CSS alone, so the
+     centered row always reads clearly against the two faded rows above/below it. */
+  .wheel-item.is-center{ opacity:1; font-weight:900; }
+  /* purely visual "this is the selected row" band, matching one item's height, centered in
+     the wheel container. */
+  .wheel-highlight{
+    position:absolute; left:0; right:0; top:48px; height:48px; border-radius:10px;
+    background:var(--accent-soft); border:1.5px solid var(--accent); pointer-events:none;
   }
-  .dial-nudge-btn:active{ transform: scale(.9); }
-  .dial-nudge-btn:disabled{ opacity:.4; cursor:default; }
-  .dial-sm .dial-nudge-btn{ width:24px; height:24px; font-size:.9rem; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -374,6 +391,26 @@
     margin-top:4px; width:100%; border:1px solid var(--accent); background:transparent; color:var(--accent);
     font: inherit; font-weight:700; font-size:.78rem; padding:7px 8px; border-radius:12px; cursor:pointer;
   }
+
+  /* 24h day timeline ("いちにち" タブ): one absolute-positioned horizontal bar spanning
+     0:00-24:00, built from buildDayTimeline()'s ordered {type,start,end,label} segments
+     (the 3 fixed blocks, reusing their own --fixed-* dot colors, plus free-time gaps in
+     an accent tone so "open time" visually pops against the neutral fixed-block grays).
+     Absolute positioning (not flex) keeps each segment's left/width tied directly to its
+     own start/end minute, so it stays correct even if two fixed blocks ever overlap. */
+  .dayline-bar{
+    position:relative; width:100%; height:64px; border-radius:16px; overflow:hidden;
+    background:var(--bg); border:1px solid var(--border);
+  }
+  .dayline-seg{
+    position:absolute; top:0; bottom:0; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; padding:0 4px; font-size:.72rem; font-weight:700; color:var(--ink);
+    border-right:2px solid var(--bg);
+  }
+  .dayline-seg span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dayline-seg.is-free{ background:var(--accent-soft); color:var(--accent); }
+  .dayline-gridline{ position:absolute; top:0; bottom:0; width:1px; background:var(--surface); opacity:.55; }
+  .dayline-ticks{ display:flex; justify-content:space-between; margin:6px 2px 0; font-size:.72rem; color:var(--muted); font-variant-numeric: tabular-nums; }
 
   /* bottom tab bar */
   .tabbar{
@@ -439,6 +476,16 @@
         <button class="link-btn" id="openHistory">きろくを みる ▸</button>
       </section>
 
+      <section class="card">
+        <h2>1にちの ながれ</h2>
+        <p class="hint">がっこう・すいみんなどと、じゆうな じかんが いつ あるか みてみよう</p>
+        <div class="dayline-bar" id="daylineBar"></div>
+        <div class="dayline-ticks">
+          <span>0じ</span><span>6じ</span><span>12じ</span><span>18じ</span><span>24じ</span>
+        </div>
+        <ul class="legend" id="daylineLegend"></ul>
+      </section>
+
       <button class="fixed-toggle" id="toggleFixed" aria-expanded="false" aria-controls="fixedCard">がっこう・すいみんなど： - ▾</button>
       <section class="card" id="fixedCard" hidden>
         <h2>がっこう・すいみんなどの じかん</h2>
@@ -448,7 +495,7 @@
           <span>がっこう・すいみんなど ごうけい</span>
           <strong id="fixedTotal">-</strong>
         </div>
-        <p class="hint">ダイヤルを まわすか タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
+        <p class="hint">ボタンを タップして、だいたいの じかんに あわせてね。ここから じゆうな じかんを けいさんするよ</p>
       </section>
     </section>
 
@@ -468,7 +515,7 @@
           </label>
           <div class="field">
             <span>どのくらい？</span>
-            <div class="dial-wrap" id="taskDial"></div>
+            <div class="wheel-pair" id="taskDial"></div>
           </div>
           <p class="field-error" id="formError" role="alert"></p>
           <button type="submit" class="btn btn-accent">＋ きょうに ついかする</button>
@@ -535,7 +582,7 @@
       </div>
       <div class="field">
         <span>どのくらい？</span>
-        <div class="dial-wrap" id="presetModalDial"></div>
+        <div class="wheel-pair" id="presetModalDial"></div>
       </div>
       <p class="field-error" id="presetModalError" role="alert"></p>
       <button type="button" class="btn btn-accent" id="presetModalConfirm">＋ ついかする</button>
@@ -563,7 +610,7 @@
           <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 12V3A9 9 0 0 1 19.5 16.5Z" fill="currentColor"/></svg>
           <div class="help-body">
             <h3>きょう</h3>
-            <p>がっこう・すいみんなどの じかんをダイヤルで あわせると、きょう じゆうに つかえる じかんが わかるよ。まるい グラフと リストで みれるよ。</p>
+            <p>がっこう・すいみんなどの じかんをボタンで あわせると、きょう じゆうに つかえる じかんが わかるよ。まるい グラフと リストで みれるよ。</p>
           </div>
         </div>
         <div class="help-section">
@@ -585,6 +632,13 @@
           <div class="help-body">
             <h3>あそび</h3>
             <p>あいてる じかんで できる あそびを みつけよう。「やってみる」を おすと、きょうの よていに ついかされるよ。</p>
+          </div>
+        </div>
+        <div class="help-section">
+          <svg class="help-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="9" width="20" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><line x1="8.5" y1="9" x2="8.5" y2="15" stroke="currentColor" stroke-width="2"/><line x1="15.5" y1="9" x2="15.5" y2="15" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="help-body">
+            <h3>いちにち</h3>
+            <p>がっこう・すいみんなどが 1にちの どこに あるか、ぼうグラフで みれるよ。あいている じかんも ひとめで わかるよ。</p>
           </div>
         </div>
         <div class="help-section">
@@ -611,21 +665,26 @@
   // each block now stores a time-of-day start (+ end, or + a plain length for "other"),
   // never a flat duration directly — see fixedBlockDuration() below for how the duration
   // used by fixedSum/freeTotal is derived from these fields.
+  // each field now lists its own small set of tappable preset values (minutes-since-midnight
+  // for start/end, plain minutes for "other"'s length) instead of driving a clock-face/duration
+  // dial — see the preset-button-row setup near fixedListEl below. `format` renders each preset's
+  // button label; every FIXED_DEFAULTS value below is deliberately included in its own field's
+  // preset list so the default always shows as a selected button on first load.
   var FIXED_BLOCKS = [
     {key:"school", name:"がっこう",            colorVar:"--fixed-school",
       fields:[
-        {sub:"start", name:"がっこうが はじまる"},
-        {sub:"end",   name:"がっこうが おわる"}
+        {sub:"start", name:"がっこうが はじまる",  presets:[420,450,480,510,540],              format:formatTimeOfDay},
+        {sub:"end",   name:"がっこうが おわる",    presets:[840,870,900,930,960],              format:formatTimeOfDay}
       ]},
     {key:"other",  name:"ごはん・おふろ など", colorVar:"--fixed-other",
       fields:[
-        {sub:"start",  name:"はじまる じかん"},
-        {sub:"length", name:"どれくらい"}
+        {sub:"start",  name:"はじまる じかん", presets:[420,720,900,960,1020,1080,1140],   format:formatTimeOfDay},
+        {sub:"length", name:"どれくらい",      presets:[15,30,45,60,90,120],               format:formatMinutes}
       ]},
     {key:"sleep",  name:"すいみん",            colorVar:"--fixed-sleep",
       fields:[
-        {sub:"start", name:"ねる じかん"},
-        {sub:"end",   name:"おきる じかん"}
+        {sub:"start", name:"ねる じかん",   presets:[1140,1170,1200,1230,1260,1290,1320], format:formatTimeOfDay},
+        {sub:"end",   name:"おきる じかん", presets:[330,360,390,420,450],                format:formatTimeOfDay}
       ]}
   ];
   // defaults for state.fixed: start/end/length are all minutes-since-midnight.
@@ -634,20 +693,6 @@
     sleep:  {start:1260, end:390},   // 21:00 -> 6:30 (wraps past midnight)
     other:  {start:960,  length:60}  // 16:00, for 1じかん
   };
-  // clock-face dial (time-of-day): min:0, max:1439 so 0:00/24:00 share one screen position,
-  // which is correct for a real 24h clock (unlike buildDial()'s usual tick-skip-at-max guard,
-  // meant to avoid a duplicate label — nothing here is ever configured at exactly 1439).
-  var TIME_DIAL_STEP = 10;
-  var TIME_DIAL_TICKS = [
-    {value:0,    label:"0じ"},
-    {value:360,  label:"6じ"},
-    {value:720,  label:"12じ"},
-    {value:1080, label:"18じ"}
-  ];
-  // "other"'s length dial reuses the exact range/step of the existing task-duration dials
-  // (taskDial/presetModalDial below), not a new range.
-  var OTHER_LENGTH_MAX = 240;
-  var OTHER_LENGTH_STEP = 5;
   // each block's own total duration is now derived from start/end (or start/length), never
   // stored directly: school/other are same-day subtraction, sleep wraps past midnight.
   function fixedBlockDuration(key, fixed){
@@ -660,10 +705,65 @@
     if(key === "other") return f.length;
     return Math.max(0, f.end - f.start);
   }
+  // key -> colorVar lookup for FIXED_BLOCKS, used by the "いちにち" day-timeline so it can
+  // reuse each block's own dot color without re-deriving it from FIXED_BLOCKS every call.
+  var FIXED_COLOR_VAR = {};
+  FIXED_BLOCKS.forEach(function(b){ FIXED_COLOR_VAR[b.key] = b.colorVar; });
+  // minutes-since-midnight -> "H:MM", except 1440 itself reads as "24:00" (the day's own
+  // end), unlike formatTimeOfDay()'s wrap-to-0:00 — only used for the timeline's own edges.
+  function formatDayEdge(totalMinutes){
+    return totalMinutes >= DAY_MINUTES ? "24:00" : formatTimeOfDay(totalMinutes);
+  }
+  // builds the ordered list of segments for the "いちにち" (whole-day) timeline: each fixed
+  // block's own occupied minute-range(s) (school/other: one; sleep: two when it wraps past
+  // midnight, both still labeled/colored as one continuous block), plus a "free" segment for
+  // every gap left over once the (merged, so any accidental overlap between blocks collapses
+  // into one range) union of occupied time is subtracted from the full 24h day. Never places
+  // individual tasks — they carry no time-of-day data, only a duration.
+  function buildDayTimeline(fixed){
+    var occupied = [];
+    FIXED_BLOCKS.forEach(function(b){
+      var duration = fixedBlockDuration(b.key, fixed);
+      if(duration <= 0) return;
+      var start = fixed[b.key].start;
+      var end = start + duration;
+      if(end > DAY_MINUTES){
+        // wraps past midnight (typically sleep): split into two same-type/same-label
+        // pieces so the bar (which only spans 0:00-24:00 once) still reads as one block.
+        occupied.push({type:b.key, start:start, end:DAY_MINUTES, label:b.name});
+        occupied.push({type:b.key, start:0, end:end-DAY_MINUTES, label:b.name});
+      } else {
+        occupied.push({type:b.key, start:start, end:end, label:b.name});
+      }
+    });
+    occupied.sort(function(a,c){ return a.start-c.start; });
+
+    // merge overlapping/adjacent occupied ranges into a clean union, purely to compute the
+    // free-time gaps below — the per-block segments pushed into `segments` stay unmerged so
+    // each still renders/labels as its own fixed block.
+    var merged = [];
+    occupied.forEach(function(seg){
+      var last = merged[merged.length-1];
+      if(last && seg.start <= last.end) last.end = Math.max(last.end, seg.end);
+      else merged.push({start:seg.start, end:seg.end});
+    });
+
+    var segments = occupied.slice();
+    var cursor = 0;
+    merged.forEach(function(m){
+      if(m.start > cursor) segments.push({type:"free", start:cursor, end:m.start, label:"じゆうな じかん"});
+      cursor = Math.max(cursor, m.end);
+    });
+    if(cursor < DAY_MINUTES) segments.push({type:"free", start:cursor, end:DAY_MINUTES, label:"じゆうな じかん"});
+
+    segments.sort(function(a,c){ return a.start-c.start; });
+    return segments;
+  }
   function pad2(n){ return n < 10 ? "0"+n : String(n); }
   function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
-  // shared with buildDial()'s dial.set(), so a stored value snaps to the exact same grid
-  // the dial itself would produce for that same input.
+  // generic snap-to-grid helper, shared by loadState()'s fixed-block sanitizers and the
+  // duration wheel picker's set(), so a stored/seeded value lands on the exact same grid
+  // the live control itself would produce for that same input.
   function snapToStep(raw, min, step){ return Math.round((raw-min)/step)*step + min; }
   // shallow clone of a FIXED_DEFAULTS[key] object — used whenever a default is written into
   // state so state can never alias (and later mutate) the shared default object itself.
@@ -875,12 +975,14 @@
             var isLength = (sub === "length");
             var checked = sanitizeNumber(v[sub], NaN, {integer:true, min:0, max: isLength ? DAY_MINUTES : 1439});
             if(!isFinite(checked)){ valid = false; return; }
-            // snap to the same step grid buildDial()'s dial.set() snaps to, then clamp —
-            // otherwise the dial's displayed (snapped) value could permanently disagree
-            // with this stored value.
+            // snap/clamp to the same grid this field always used (10-minute steps for
+            // time-of-day, 0-1439; 5-minute steps for "other"'s length, 0-240) — this is
+            // independent of the preset buttons now shown for this field: a legacy stored
+            // value that doesn't exactly match any preset still lands on a sane, bounded
+            // value, it just won't show any preset button as active for it.
             next[sub] = isLength
-              ? clamp(snapToStep(checked, 0, OTHER_LENGTH_STEP), 0, OTHER_LENGTH_MAX)
-              : clamp(snapToStep(checked, 0, TIME_DIAL_STEP), 0, 1439);
+              ? clamp(snapToStep(checked, 0, 5), 0, 240)
+              : clamp(snapToStep(checked, 0, 10), 0, 1439);
           });
         }
         parsed.fixed[b.key] = valid ? next : shallowClone(FIXED_DEFAULTS[b.key]);
@@ -1087,135 +1189,129 @@
     return dot;
   }
 
-  // ---- dial: drag or tap around the ring to set a value within [min,max] ----
-  // Visual feedback is instant on every move; the value is only committed
-  // (onChange fires, which saves + re-renders the app) when the finger lifts,
-  // so a drag never rebuilds the rest of the page mid-gesture.
+  // ---- wheel picker: iPhone-alarm-style vertically-scrolling wheel --------
+  // One ".wheel" = one CSS scroll-snap column (no native <input>, so the look stays
+  // consistent across browsers/platforms, and the browser's own scroll physics do the
+  // heavy lifting instead of hand-rolled drag tracking). ITEM_HEIGHT must match the
+  // ".wheel-item"/".wheel-pad" CSS height (48px) exactly, since every position below is
+  // computed from it rather than measured from the DOM.
+  //
+  // Why "scrollTop = index * ITEM_HEIGHT" centers that item regardless of the container's
+  // height H or the pad height P: with P chosen as (H - ITEM_HEIGHT)/2 (see CSS), the
+  // container's vertical center sits at contentOffset = scrollTop + H/2, and item i's own
+  // center sits at contentOffset = P + i*ITEM_HEIGHT + ITEM_HEIGHT/2. Setting those equal and
+  // substituting P cancels every H/ITEM_HEIGHT term down to scrollTop = i*ITEM_HEIGHT.
+  var WHEEL_ITEM_HEIGHT = 48;
 
-  function buildDial(containerId, opts){
+  function buildWheel(containerId, values, opts){
     opts = opts || {};
-    var min = opts.min || 0;
-    var max = opts.max;
-    var step = opts.step || 5;
     var format = opts.format || function(v){ return String(v); };
-    var tickFormat = opts.tickFormat || function(v){ return String(Math.round(v)); };
-    var tickValues = opts.ticks || [min, min+(max-min)*0.25, min+(max-min)*0.5, min+(max-min)*0.75];
+    var onChangeCb = opts.onChange || null;
 
-    var svgNS = "http://www.w3.org/2000/svg";
     var root = document.getElementById(containerId);
     root.innerHTML =
-      '<div class="dial-visual">' +
-        '<svg viewBox="0 0 160 160" class="dial-svg" aria-hidden="true">' +
-          '<circle cx="80" cy="80" r="58" fill="none" stroke="var(--border)" stroke-width="12"/>' +
-          '<path class="dial-fill" fill="var(--accent)"/>' +
-          '<g class="dial-ticks"></g>' +
-          '<circle class="dial-handle" r="11" fill="var(--accent)" stroke="var(--surface)" stroke-width="3"/>' +
-        '</svg>' +
-        '<div class="dial-center"><div class="dial-value">0</div></div>' +
+      '<div class="wheel-track">' +
+        '<div class="wheel-pad"></div>' +
+        values.map(function(v){
+          return '<div class="wheel-item" data-value="' + v + '">' + format(v) + '</div>';
+        }).join('') +
+        '<div class="wheel-pad"></div>' +
       '</div>' +
-      '<div class="dial-nudge-row">' +
-        '<button type="button" class="dial-nudge-btn" aria-label="すこし へらす">−</button>' +
-        '<button type="button" class="dial-nudge-btn" aria-label="すこし ふやす">＋</button>' +
-      '</div>';
-    var svg = root.querySelector(".dial-svg");
-    var fillPath = root.querySelector(".dial-fill");
-    var handle = root.querySelector(".dial-handle");
-    var valueEl = root.querySelector(".dial-value");
-    var nudgeBtns = root.querySelectorAll(".dial-nudge-btn");
-    var nudgeDown = nudgeBtns[0], nudgeUp = nudgeBtns[1];
-    var ticksG = root.querySelector(".dial-ticks");
-    var cx = 80, cy = 80, rTrack = 58;
+      '<div class="wheel-highlight" aria-hidden="true"></div>';
+    var items = Array.prototype.slice.call(root.querySelectorAll(".wheel-item"));
 
-    tickValues.forEach(function(tv){
-      var v = (tv && typeof tv === "object") ? tv.value : tv;
-      if(v === max && min !== max) return; // avoid drawing on top of the min tick at angle 0/360
-      var label = (tv && typeof tv === "object") ? tv.label : tickFormat(v);
-      var ang = ((v-min)/(max-min))*360;
-      var p = polar(cx, cy, rTrack+16, ang);
-      var t = document.createElementNS(svgNS, "text");
-      t.setAttribute("x", p.x); t.setAttribute("y", p.y+3);
-      t.setAttribute("text-anchor","middle"); t.setAttribute("font-size","9"); t.setAttribute("fill","var(--muted)");
-      t.textContent = label;
-      ticksG.appendChild(t);
+    var settledIndex = 0;
+    var debounceHandle = null;
+
+    function clampIndex(i){ return Math.max(0, Math.min(values.length-1, i)); }
+    function nearestIndex(){ return clampIndex(Math.round(root.scrollTop / WHEEL_ITEM_HEIGHT)); }
+
+    // live visual feedback on every scroll tick (not debounced): keeps the row nearest
+    // center reading as the "selected" one while the wheel is still moving.
+    function paintCenter(idx){
+      items.forEach(function(item, i){ item.classList.toggle("is-center", i === idx); });
+    }
+
+    function settle(){
+      var idx = nearestIndex();
+      paintCenter(idx);
+      if(idx !== settledIndex){
+        settledIndex = idx;
+        if(onChangeCb) onChangeCb(values[settledIndex]);
+      }
+    }
+
+    root.addEventListener("scroll", function(){
+      paintCenter(nearestIndex());
+      if(debounceHandle) clearTimeout(debounceHandle);
+      // fires once ~120ms after scrolling actually stops; this debounce (not `scrollend`
+      // alone) is what settles the value, since `scrollend` isn't universally supported yet.
+      debounceHandle = setTimeout(settle, 120);
+    });
+    // complementary fast path where supported — harmless to also run the debounce path above.
+    root.addEventListener("scrollend", function(){
+      if(debounceHandle){ clearTimeout(debounceHandle); debounceHandle = null; }
+      settle();
     });
 
-    var value = min;
+    // tappable rows: tapping a non-centered item smoothly scrolls it to center, as an
+    // alternative to dragging.
+    items.forEach(function(item, i){
+      item.addEventListener("click", function(){
+        root.scrollTo({ top: i * WHEEL_ITEM_HEIGHT, behavior: "smooth" });
+      });
+    });
+
+    paintCenter(settledIndex);
+    return {
+      get: function(){ return values[settledIndex]; },
+      set: function(v){
+        var idx = values.indexOf(v);
+        if(idx === -1) idx = 0;
+        settledIndex = idx;
+        root.scrollTop = idx * WHEEL_ITEM_HEIGHT; // instant: no smooth animation for programmatic sync
+        paintCenter(idx);
+      },
+      onChange: function(cb){ onChangeCb = cb; }
+    };
+  }
+
+  // Combines an hours wheel (0-4) and a quarter-hour minutes wheel (0/15/30/45) into one
+  // "total minutes" duration control — the two-wheel replacement for the old circular dial
+  // at the taskDial/presetModalDial call sites. Renders both wheels into wrapperId's own
+  // container (mirroring buildDial()'s old convention of owning containerId.innerHTML).
+  function buildDurationPicker(wrapperId){
+    var wrapper = document.getElementById(wrapperId);
+    wrapper.innerHTML =
+      '<div class="wheel-col">' +
+        '<span class="wheel-col-label">じかん</span>' +
+        '<div class="wheel" id="' + wrapperId + '-hours"></div>' +
+      '</div>' +
+      '<div class="wheel-col">' +
+        '<span class="wheel-col-label">ふん</span>' +
+        '<div class="wheel" id="' + wrapperId + '-minutes"></div>' +
+      '</div>';
+
+    var hoursWheel = buildWheel(wrapperId + "-hours", [0,1,2,3,4]);
+    var minutesWheel = buildWheel(wrapperId + "-minutes", [0,15,30,45]);
     var onChangeCb = null;
 
-    function renderVisual(){
-      var ang = ((value-min)/(max-min))*360;
-      var p = polar(cx, cy, rTrack, ang);
-      handle.setAttribute("cx", p.x); handle.setAttribute("cy", p.y);
-      fillPath.setAttribute("d", value <= min ? "" : arcPath(cx,cy,rTrack+6,rTrack-6,0,ang));
-      valueEl.textContent = format(value);
-      nudgeDown.disabled = value <= min;
-      nudgeUp.disabled = value >= max;
-    }
+    function combined(){ return clamp(hoursWheel.get()*60 + minutesWheel.get(), 0, 240); }
+    function notify(){ if(onChangeCb) onChangeCb(combined()); }
+    hoursWheel.onChange(notify);
+    minutesWheel.onChange(notify);
 
-    function valueFromClientPoint(clientX, clientY){
-      var rect = svg.getBoundingClientRect();
-      var cxPix = rect.left + rect.width/2;
-      var cyPix = rect.top + rect.height/2;
-      var nx = (clientX - cxPix) / (rect.width/2);
-      var ny = (clientY - cyPix) / (rect.height/2);
-      var deg = Math.atan2(ny, nx)*180/Math.PI + 90;
-      if(deg < 0) deg += 360;
-      var raw = min + (deg/360)*(max-min);
-      var snapped = snapToStep(raw, min, step);
-      return clamp(snapped, min, max);
-    }
-
-    function commit(rawValue){
-      value = clamp(Math.round(rawValue), min, max);
-      renderVisual();
-      if(onChangeCb) onChangeCb(value);
-    }
-
-    var dragging = false;
-    var activePointerId = null;
-    function pointerDown(ev){
-      if(dragging) return;
-      dragging = true;
-      activePointerId = ev.pointerId;
-      value = valueFromClientPoint(ev.clientX, ev.clientY);
-      renderVisual();
-      try{ svg.setPointerCapture(ev.pointerId); }catch(e){}
-    }
-    function pointerMove(ev){
-      if(!dragging || ev.pointerId !== activePointerId) return;
-      value = valueFromClientPoint(ev.clientX, ev.clientY);
-      renderVisual();
-    }
-    function handleDragEnd(ev){
-      if(!dragging || ev.pointerId !== activePointerId) return;
-      dragging = false;
-      activePointerId = null;
-      commit(value);
-    }
-    svg.addEventListener("pointerdown", pointerDown);
-    svg.addEventListener("pointermove", pointerMove);
-    svg.addEventListener("pointerup", handleDragEnd);
-    svg.addEventListener("pointercancel", handleDragEnd);
-    // safety net: if pointer capture is ever lost without a pointerup/pointercancel reaching
-    // us (dropped event, OS-level interruption, etc.), make sure the dial doesn't get stuck.
-    svg.addEventListener("lostpointercapture", handleDragEnd);
-    // extra safety net: if setPointerCapture silently failed/no-opped for this element and
-    // the pointer left the svg's bounds before release, svg-scoped listeners above never
-    // fire; these window-level fallbacks still catch the release (handleDragEnd's own
-    // pointerId/dragging guard keeps this safe to attach broadly, no double-firing).
-    window.addEventListener("pointerup", handleDragEnd);
-    window.addEventListener("pointercancel", handleDragEnd);
-
-    // tap-only fine adjustment, no keyboard: nudges by the same step the dial snaps to
-    nudgeDown.addEventListener("click", function(){ commit(value - step); });
-    nudgeUp.addEventListener("click", function(){ commit(value + step); });
-
-    renderVisual();
     return {
-      get: function(){ return value; },
-      set: function(v){ value = clamp(snapToStep(v, min, step), min, max); renderVisual(); },
-      onChange: function(cb){ onChangeCb = cb; },
-      isDragging: function(){ return dragging; }
+      get: combined,
+      set: function(totalMinutes){
+        totalMinutes = clamp(Math.round(totalMinutes || 0), 0, 240);
+        var h = Math.floor(totalMinutes/60);
+        var m = snapToStep(totalMinutes % 60, 0, 15);
+        if(m >= 60){ m -= 60; h += 1; }
+        hoursWheel.set(clamp(h, 0, 4));
+        minutesWheel.set(m);
+      },
+      onChange: function(cb){ onChangeCb = cb; }
     };
   }
 
@@ -1294,6 +1390,52 @@
     }
   }
 
+  // renders the "いちにち" tab's 24h bar + legend from buildDayTimeline()'s segment list.
+  // Pure display: never touches state, so render() can call it unconditionally every time.
+  function renderDayline(fixed){
+    var segments = buildDayTimeline(fixed);
+
+    var bar = daylineBarEl;
+    bar.innerHTML = "";
+    [360,720,1080].forEach(function(m){
+      var line = document.createElement("div");
+      line.className = "dayline-gridline";
+      line.style.left = (m/DAY_MINUTES*100) + "%";
+      bar.appendChild(line);
+    });
+    segments.forEach(function(seg){
+      var minutes = seg.end - seg.start;
+      var div = document.createElement("div");
+      div.className = "dayline-seg" + (seg.type === "free" ? " is-free" : "");
+      div.style.left = (seg.start/DAY_MINUTES*100) + "%";
+      div.style.width = (minutes/DAY_MINUTES*100) + "%";
+      if(seg.type !== "free") div.style.background = "var(" + FIXED_COLOR_VAR[seg.type] + ")";
+      div.title = seg.label + " " + formatDayEdge(seg.start) + "〜" + formatDayEdge(seg.end) + "（" + formatMinutes(minutes) + "）";
+      // a narrow segment (e.g. a short free-time gap) just stays a color block — cramming
+      // in unreadable text would do more harm than the full breakdown below already fixes.
+      if(minutes >= 120){
+        var span = document.createElement("span");
+        span.textContent = seg.label;
+        div.appendChild(span);
+      }
+      bar.appendChild(div);
+    });
+
+    var legend = daylineLegendEl;
+    legend.innerHTML = "";
+    segments.forEach(function(seg){
+      var li = document.createElement("li");
+      var colorValue = seg.type === "free" ? "var(--accent)" : "var(" + FIXED_COLOR_VAR[seg.type] + ")";
+      var dot = makeDot("legend-dot", colorValue);
+      var name = document.createElement("span");
+      name.className = "legend-name";
+      name.textContent = seg.label;
+      var time = makeLegendTimeSpan(formatDayEdge(seg.start) + "〜" + formatDayEdge(seg.end) + "・" + formatMinutes(seg.end-seg.start));
+      li.appendChild(dot); li.appendChild(name); li.appendChild(time);
+      legend.appendChild(li);
+    });
+  }
+
   // ---- render ------------------------------------------------------------
 
   function render(){
@@ -1318,13 +1460,12 @@
 
     FIXED_BLOCKS.forEach(function(b){
       b.fields.forEach(function(field){
-        var dial = fixedDials[b.key][field.sub];
-        var v = state.fixed[b.key][field.sub];
-        if(!dial.isDragging() && dial.get() !== v) dial.set(v);
+        paintFixedPresetRow(b.key, field.sub);
       });
       fixedBlockTotalEls[b.key].textContent = "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed));
     });
     fixedTotalEl.textContent = formatMinutes(fixedSum);
+    renderDayline(state.fixed);
     fixedCardEl.hidden = !fixedCardExpanded;
     toggleFixedEl.setAttribute("aria-expanded", String(fixedCardExpanded));
     toggleFixedEl.textContent = "がっこう・すいみんなど： " + formatMinutes(fixedSum) + (fixedCardExpanded ? " ▴" : " ▾");
@@ -1436,7 +1577,7 @@
       // school+other+sleep alone already exceed the day: freeTotal silently clamps to 0,
       // which would otherwise look like an (unexplained) task-overflow. Different root
       // cause, different message, and it takes priority over the isOver check below.
-      warnSlot.innerHTML = buildWarningBanner('<strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ダイヤルを みなおしてね。');
+      warnSlot.innerHTML = buildWarningBanner('<strong>すいみん・がっこうなどの ごうけいが 24じかんより おおいよ。</strong> ボタンを みなおしてね。');
     } else if(isOver){
       warnSlot.innerHTML = buildWarningBanner('<strong>よていが ' + formatMinutes(overflow) + ' おおいよ。</strong> なにか へらしてみよう。');
     }
@@ -1701,6 +1842,8 @@
   var routineListEl = document.getElementById("routineList");
   var suggestGridEl = document.getElementById("suggestGrid");
   var suggestEmptyEl = document.getElementById("suggestEmpty");
+  var daylineBarEl = document.getElementById("daylineBar");
+  var daylineLegendEl = document.getElementById("daylineLegend");
   function switchTab(name){
     tabButtons.forEach(function(btn){
       var active = btn.dataset.tab === name;
@@ -1721,7 +1864,18 @@
     render();
   });
 
-  var fixedDials = {};
+  // key -> sub -> the preset row's own <div>, so paintFixedPresetRow() (called from render(),
+  // mirroring how paintWeekdayChip() repaints the routine weekday chips) can re-walk its
+  // buttons and toggle aria-pressed to match the latest state.fixed[key][sub].
+  var fixedPresetRows = {};
+  function paintFixedPresetRow(key, sub){
+    var row = fixedPresetRows[key][sub];
+    var current = state.fixed[key][sub];
+    Array.prototype.forEach.call(row.children, function(btn){
+      btn.setAttribute("aria-pressed", String(Number(btn.dataset.value) === current));
+    });
+  }
+
   var fixedBlockTotalEls = {};
   var fixedListEl = document.getElementById("fixedList");
   FIXED_BLOCKS.forEach(function(b){
@@ -1748,37 +1902,44 @@
 
     fixedListEl.appendChild(block);
 
-    fixedDials[b.key] = {};
+    fixedPresetRows[b.key] = {};
     b.fields.forEach(function(field){
       var group = document.createElement("div");
       group.className = "fixed-dial-group";
       var label = document.createElement("span");
       label.className = "fixed-dial-label";
       label.textContent = field.name;
-      var dialWrap = document.createElement("div");
-      dialWrap.className = "dial-wrap dial-sm";
-      dialWrap.id = "fixedDial-" + b.key + "-" + field.sub;
-      group.appendChild(label); group.appendChild(dialWrap);
-      dialsRow.appendChild(group);
+      group.appendChild(label);
 
-      // "length" (other's duration) reuses the plain duration dial; start/end are
-      // 24h clock-face dials (see TIME_DIAL_STEP/TIME_DIAL_TICKS above).
-      var dial = (field.sub === "length")
-        ? buildDial(dialWrap.id, {max:OTHER_LENGTH_MAX, step:OTHER_LENGTH_STEP, format:formatMinutes})
-        : buildDial(dialWrap.id, {min:0, max:1439, step:TIME_DIAL_STEP, format:formatTimeOfDay, tickFormat:formatTimeOfDay, ticks:TIME_DIAL_TICKS});
-      dial.set(state.fixed[b.key][field.sub]);
-      dial.onChange(function(v){
-        state.fixed[b.key][field.sub] = v;
-        saveState(); render();
+      // tappable preset row: same direct-commit-on-tap pattern as the routine weekday chips
+      // (paintWeekdayChip) — click immediately writes into state.fixed and re-renders, no
+      // drag/confirm step. A stored value that matches none of these presets (e.g. left over
+      // from the old dial) just leaves every button here unpressed; see paintFixedPresetRow().
+      var row = document.createElement("div");
+      row.className = "fixed-preset-row";
+      field.presets.forEach(function(v){
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "fixed-preset-btn";
+        btn.textContent = field.format(v);
+        btn.dataset.value = v;
+        btn.setAttribute("aria-pressed", String(state.fixed[b.key][field.sub] === v));
+        btn.addEventListener("click", function(){
+          state.fixed[b.key][field.sub] = v;
+          saveState(); render();
+        });
+        row.appendChild(btn);
       });
-      fixedDials[b.key][field.sub] = dial;
+      group.appendChild(row);
+      dialsRow.appendChild(group);
+      fixedPresetRows[b.key][field.sub] = row;
     });
   });
 
   // ---- today's one-off task form ("そのひ" タブ) -----------------------------
 
-  var taskDial = buildDial("taskDial", {max:240, format:formatMinutes});
-  taskDial.onChange(function(){ /* value already committed on release */ });
+  var taskDial = buildDurationPicker("taskDial");
+  taskDial.onChange(function(){ /* value already committed when a wheel settles */ });
 
   document.getElementById("toggleTable").addEventListener("click", function(){
     var wrap = document.getElementById("tableWrap");
@@ -1808,7 +1969,7 @@
     var name = nameInput.value.trim().slice(0, 20);
     var errorEl = document.getElementById("formError");
     if(!name){ errorEl.textContent = "なにを するか かいてね"; return; }
-    if(!taskDial.get()){ errorEl.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
+    if(!taskDial.get()){ errorEl.textContent = "じかんを えらんでね"; return; }
     errorEl.textContent = "";
     var minutes = taskDial.get();
     nameInput.value = "";
@@ -1821,7 +1982,7 @@
   var presetModalName = document.getElementById("presetModalName");
   var presetModalError = document.getElementById("presetModalError");
   var presetModalConfirmBtn = document.getElementById("presetModalConfirm");
-  var presetModalDial = buildDial("presetModalDial", {max:240, format:formatMinutes});
+  var presetModalDial = buildDurationPicker("presetModalDial");
   var modalPendingName = null;
   var modalOpenerEl = null;
 
@@ -1850,7 +2011,7 @@
   });
   presetModalConfirmBtn.addEventListener("click", function(){
     ensureToday(); // resolve any pending day rollover before touching state.day.tasks below
-    if(!presetModalDial.get()){ presetModalError.textContent = "ダイヤルを まわして、じかんを きめてね"; return; }
+    if(!presetModalDial.get()){ presetModalError.textContent = "じかんを えらんでね"; return; }
     var name = modalPendingName, minutes = presetModalDial.get();
     // addVariableTask() switches to the "today" tab, which may hide the opener (the preset
     // card button lives in panel-oneoff). Run it BEFORE closePresetModal() so that function's
