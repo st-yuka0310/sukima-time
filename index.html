@@ -151,6 +151,10 @@
     gap: 16px;
     min-width: 0;
   }
+  /* .card's own unconditional display:flex otherwise beats the UA [hidden] default, since
+     author styles always win over UA styles regardless of specificity (see #fixedCard, the
+     only .card that's ever toggled via the hidden attribute). */
+  .card[hidden]{ display:none; }
   .card h2{ font-size: 1.05rem; font-weight:700; color: var(--ink); }
   /* today-weekday is a pill; its JS-set `color` doubles as the border via currentColor, so Sun/Sat read clearly */
   .today-weekday{
