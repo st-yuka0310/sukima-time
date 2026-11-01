@@ -698,7 +698,9 @@
     var f = fixed[key];
     if(key === "sleep"){
       var d = f.end - f.start;
-      if(d <= 0) d += DAY_MINUTES;
+      // start === end means "no sleep range set", i.e. 0 minutes — not a full 24h wrap.
+      // Only an end strictly before start (d < 0) means it actually crosses midnight.
+      if(d < 0) d += DAY_MINUTES;
       return d;
     }
     if(key === "other") return f.length;
@@ -985,14 +987,13 @@
             var isLength = (sub === "length");
             var checked = sanitizeNumber(v[sub], NaN, {integer:true, min:0, max: isLength ? DAY_MINUTES : 1439});
             if(!isFinite(checked)){ valid = false; return; }
-            // snap/clamp to the same grid this field always used (10-minute steps for
-            // time-of-day, 0-1439; 5-minute steps for "other"'s length, 0-240) — this is
-            // independent of the preset buttons now shown for this field: a legacy stored
-            // value that doesn't exactly match any preset still lands on a sane, bounded
-            // value, it just won't show any preset button as active for it.
+            // snap/clamp to the same 15-minute grid every wheel (time-of-day and duration
+            // alike) actually produces, 0-1439 for time-of-day / 0-240 for "other"'s length —
+            // a stored value that doesn't land exactly on that grid (e.g. saved before the
+            // wheel pickers existed) still lands on the nearest value the wheel can show.
             next[sub] = isLength
-              ? clamp(snapToStep(checked, 0, 5), 0, 240)
-              : clamp(snapToStep(checked, 0, 10), 0, 1439);
+              ? clamp(snapToStep(checked, 0, 15), 0, 240)
+              : clamp(snapToStep(checked, 0, 15), 0, 1439);
           });
         }
         parsed.fixed[b.key] = valid ? next : shallowClone(FIXED_DEFAULTS[b.key]);
