@@ -163,9 +163,10 @@
   }
   .tab-panels{ display:flex; flex-direction:column; gap:16px; }
 
-  /* fixed day blocks: name+dot header, then a small row of tappable preset time/duration
-     buttons per field (2 fields per block: start+end for school/sleep, start+length for
-     other) — see the preset-button-row setup near fixedListEl in the script. */
+  /* fixed day blocks: name+dot header, then a wheel-picker per field (2 fields per block:
+     start+end for school/sleep, start+length for other) — see the FIXED_BLOCKS wiring near
+     fixedListEl in the script, which builds each field's wheel via buildTimeOfDayPicker()/
+     buildDurationPicker(). */
   .fixed-list{ display:flex; flex-direction:column; gap:20px; }
   .fixed-block{ display:flex; flex-direction:column; gap:10px; }
   .fixed-block + .fixed-block{ border-top:1px solid var(--border); padding-top:20px; }
@@ -175,17 +176,6 @@
   .fixed-dials{ display:flex; justify-content:center; flex-wrap:wrap; gap:16px; }
   .fixed-dial-group{ display:flex; flex-direction:column; align-items:center; gap:6px; max-width:200px; }
   .fixed-dial-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); text-align:center; }
-  /* preset-button row for a single fixed-block field: modeled on .weekday-row/.weekday-chip's
-     persistent-selection pattern (aria-pressed toggles active vs. inactive) rather than the
-     one-shot legend-pending-chips, since a fixed-block value stays selected until re-tapped. */
-  .fixed-preset-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
-  .fixed-preset-btn{
-    border:1.5px solid var(--border); background:var(--bg); color:var(--ink);
-    font: inherit; font-weight:700; font-size:.78rem; padding:6px 11px; border-radius:999px;
-    cursor:pointer; font-variant-numeric: tabular-nums;
-  }
-  .fixed-preset-btn[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); border-color:transparent; }
-  .fixed-preset-btn:active{ transform: scale(.95); }
   .fixed-block-total{ margin:0; font-size:.8rem; color:var(--ink-soft); text-align:center; }
   .fixed-block-total strong{ color:var(--ink); }
   .fixed-total{
@@ -263,7 +253,7 @@
   .field input:focus-visible, .chip:focus-visible, .legend-icon-btn:focus-visible,
   .suggest-pick:focus-visible, .btn:focus-visible, .link-btn:focus-visible, .tab-btn:focus-visible,
   .preset-card:focus-visible, .weekday-chip:focus-visible, .routine-del:focus-visible,
-  .fixed-toggle:focus-visible, .fixed-preset-btn:focus-visible,
+  .fixed-toggle:focus-visible,
   .help-btn:focus-visible{
     outline: 3px solid var(--accent); outline-offset: 2px;
   }
@@ -336,10 +326,12 @@
   .help-body h3{ margin:0 0 4px; font-size:.92rem; font-weight:700; }
   .help-body p{ margin:0; font-size:.83rem; color:var(--ink-soft); line-height:1.6; }
 
-  /* duration wheel picker: iPhone-alarm-style scrolling wheels (hours + minutes), built from
-     scratch with CSS scroll-snap doing the physics — no native <input>, so the look stays
-     consistent across browsers/platforms. One ".wheel" = one vertically-scrolling column;
-     see buildWheel()/buildDurationPicker() in the script for the markup it injects. The
+  /* duration/time-of-day wheel picker: iPhone-alarm-style scrolling wheels (hours + minutes),
+     built from scratch with CSS scroll-snap doing the physics — no native <input>, so the
+     look stays consistent across browsers/platforms. One ".wheel" = one vertically-scrolling
+     column; see buildWheel()/buildDurationPicker()/buildTimeOfDayPicker() in the script for
+     the markup it injects (the latter two share this same CSS, one wrapper div per ".wheel-pair"
+     instance). The
      container is tall enough for 3 rows (one centered/selected + one row above/below), with
      its own scrollbar hidden since the snap + highlight band already communicate the
      interaction. Top/bottom ".wheel-pad" spacers are exactly one row tall so the first/last
@@ -358,12 +350,15 @@
   .wheel-item{
     height:48px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
     scroll-snap-align:center; font-family:"Zen Maru Gothic",sans-serif; font-weight:700;
-    font-size:1.3rem; color:var(--ink); opacity:.45; cursor:pointer;
+    font-size:1.3rem; color:var(--ink); opacity:.4; cursor:pointer;
     font-variant-numeric: tabular-nums; user-select:none;
+    transition: color .12s ease, font-size .12s ease, opacity .12s ease;
   }
-  /* kept in sync with scroll position by buildWheel()'s scroll handler, not CSS alone, so the
-     centered row always reads clearly against the two faded rows above/below it. */
-  .wheel-item.is-center{ opacity:1; font-weight:900; }
+  /* kept in sync with scroll position by buildWheel()'s scroll handler, not CSS alone. Besides
+     opacity/weight, the centered row also switches to --accent and steps up in size so the
+     "this is the selected value" change reads as an unmistakable pop against the fixed,
+     non-moving .wheel-highlight band, not a subtle flicker in the same ink color. */
+  .wheel-item.is-center{ opacity:1; font-weight:900; font-size:1.5rem; color:var(--accent); }
   /* purely visual "this is the selected row" band, matching one item's height, centered in
      the wheel container. */
   .wheel-highlight{
@@ -665,26 +660,25 @@
   // each block now stores a time-of-day start (+ end, or + a plain length for "other"),
   // never a flat duration directly — see fixedBlockDuration() below for how the duration
   // used by fixedSum/freeTotal is derived from these fields.
-  // each field now lists its own small set of tappable preset values (minutes-since-midnight
-  // for start/end, plain minutes for "other"'s length) instead of driving a clock-face/duration
-  // dial — see the preset-button-row setup near fixedListEl below. `format` renders each preset's
-  // button label; every FIXED_DEFAULTS value below is deliberately included in its own field's
-  // preset list so the default always shows as a selected button on first load.
+  // each field now declares its own `kind` ("time" = a time-of-day wheel built via
+  // buildTimeOfDayPicker(), minutes-since-midnight 0-1439; "duration" = a plain-length wheel
+  // built via buildDurationPicker(), used only by "other"'s length) instead of listing tappable
+  // preset values — see the FIXED_BLOCKS.forEach wiring near fixedListEl below.
   var FIXED_BLOCKS = [
     {key:"school", name:"がっこう",            colorVar:"--fixed-school",
       fields:[
-        {sub:"start", name:"がっこうが はじまる",  presets:[420,450,480,510,540],              format:formatTimeOfDay},
-        {sub:"end",   name:"がっこうが おわる",    presets:[840,870,900,930,960],              format:formatTimeOfDay}
+        {sub:"start", name:"がっこうが はじまる",  kind:"time"},
+        {sub:"end",   name:"がっこうが おわる",    kind:"time"}
       ]},
     {key:"other",  name:"ごはん・おふろ など", colorVar:"--fixed-other",
       fields:[
-        {sub:"start",  name:"はじまる じかん", presets:[420,720,900,960,1020,1080,1140],   format:formatTimeOfDay},
-        {sub:"length", name:"どれくらい",      presets:[15,30,45,60,90,120],               format:formatMinutes}
+        {sub:"start",  name:"はじまる じかん", kind:"time"},
+        {sub:"length", name:"どれくらい",      kind:"duration"}
       ]},
     {key:"sleep",  name:"すいみん",            colorVar:"--fixed-sleep",
       fields:[
-        {sub:"start", name:"ねる じかん",   presets:[1140,1170,1200,1230,1260,1290,1320], format:formatTimeOfDay},
-        {sub:"end",   name:"おきる じかん", presets:[330,360,390,420,450],                format:formatTimeOfDay}
+        {sub:"start", name:"ねる じかん",   kind:"time"},
+        {sub:"end",   name:"おきる じかん", kind:"time"}
       ]}
   ];
   // defaults for state.fixed: start/end/length are all minutes-since-midnight.
@@ -1315,6 +1309,47 @@
     };
   }
 
+  // Combines an hour wheel (0-23) and a quarter-hour minute wheel (0/15/30/45, same step/format
+  // convention as buildDurationPicker()'s minute wheel) into one "minutes since midnight"
+  // time-of-day control, same {get,set,onChange} shape as buildDurationPicker() — used by the
+  // school/sleep/other start+end fields in FIXED_BLOCKS below instead of the old preset buttons.
+  function buildTimeOfDayPicker(wrapperId){
+    var wrapper = document.getElementById(wrapperId);
+    wrapper.innerHTML =
+      '<div class="wheel-col">' +
+        '<span class="wheel-col-label">じ</span>' +
+        '<div class="wheel" id="' + wrapperId + '-hours"></div>' +
+      '</div>' +
+      '<div class="wheel-col">' +
+        '<span class="wheel-col-label">ふん</span>' +
+        '<div class="wheel" id="' + wrapperId + '-minutes"></div>' +
+      '</div>';
+
+    var hours = [];
+    for(var i=0;i<24;i++) hours.push(i);
+    var hourWheel = buildWheel(wrapperId + "-hours", hours, {format: pad2});
+    var minuteWheel = buildWheel(wrapperId + "-minutes", [0,15,30,45], {format: pad2});
+    var onChangeCb = null;
+
+    function combined(){ return hourWheel.get()*60 + minuteWheel.get(); }
+    function notify(){ if(onChangeCb) onChangeCb(combined()); }
+    hourWheel.onChange(notify);
+    minuteWheel.onChange(notify);
+
+    return {
+      get: combined,
+      set: function(totalMinutes){
+        var total = ((Math.round(totalMinutes || 0) % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+        var h = Math.floor(total/60);
+        var m = snapToStep(total % 60, 0, 15);
+        if(m >= 60){ m -= 60; h = (h+1) % 24; } // wrap past 23:xx, unlike buildDurationPicker's clamp
+        hourWheel.set(h);
+        minuteWheel.set(m);
+      },
+      onChange: function(cb){ onChangeCb = cb; }
+    };
+  }
+
   // ---- timer -----------------------------------------------------------
 
   function ensureTicking(){
@@ -1459,9 +1494,6 @@
     wdLabelEl.style.color = weekdayColorVar(wd);
 
     FIXED_BLOCKS.forEach(function(b){
-      b.fields.forEach(function(field){
-        paintFixedPresetRow(b.key, field.sub);
-      });
       fixedBlockTotalEls[b.key].textContent = "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed));
     });
     fixedTotalEl.textContent = formatMinutes(fixedSum);
@@ -1864,18 +1896,6 @@
     render();
   });
 
-  // key -> sub -> the preset row's own <div>, so paintFixedPresetRow() (called from render(),
-  // mirroring how paintWeekdayChip() repaints the routine weekday chips) can re-walk its
-  // buttons and toggle aria-pressed to match the latest state.fixed[key][sub].
-  var fixedPresetRows = {};
-  function paintFixedPresetRow(key, sub){
-    var row = fixedPresetRows[key][sub];
-    var current = state.fixed[key][sub];
-    Array.prototype.forEach.call(row.children, function(btn){
-      btn.setAttribute("aria-pressed", String(Number(btn.dataset.value) === current));
-    });
-  }
-
   var fixedBlockTotalEls = {};
   var fixedListEl = document.getElementById("fixedList");
   FIXED_BLOCKS.forEach(function(b){
@@ -1902,7 +1922,6 @@
 
     fixedListEl.appendChild(block);
 
-    fixedPresetRows[b.key] = {};
     b.fields.forEach(function(field){
       var group = document.createElement("div");
       group.className = "fixed-dial-group";
@@ -1911,28 +1930,26 @@
       label.textContent = field.name;
       group.appendChild(label);
 
-      // tappable preset row: same direct-commit-on-tap pattern as the routine weekday chips
-      // (paintWeekdayChip) — click immediately writes into state.fixed and re-renders, no
-      // drag/confirm step. A stored value that matches none of these presets (e.g. left over
-      // from the old dial) just leaves every button here unpressed; see paintFixedPresetRow().
-      var row = document.createElement("div");
-      row.className = "fixed-preset-row";
-      field.presets.forEach(function(v){
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "fixed-preset-btn";
-        btn.textContent = field.format(v);
-        btn.dataset.value = v;
-        btn.setAttribute("aria-pressed", String(state.fixed[b.key][field.sub] === v));
-        btn.addEventListener("click", function(){
-          state.fixed[b.key][field.sub] = v;
-          saveState(); render();
-        });
-        row.appendChild(btn);
-      });
-      group.appendChild(row);
+      // same iPhone-alarm-style wheel-picker component as the one-off task's duration input
+      // (buildTimeOfDayPicker()/buildDurationPicker(), both built on buildWheel()) — commits
+      // directly into state.fixed as soon as a wheel settles, no separate confirm step, same
+      // as the preset buttons this replaces used to on tap. The wrapper must be attached to
+      // the document (via dialsRow.appendChild below) before the builder runs, since it looks
+      // the wrapper up by id.
+      var pair = document.createElement("div");
+      pair.className = "wheel-pair";
+      var wrapperId = "fixed-" + b.key + "-" + field.sub;
+      pair.id = wrapperId;
+      group.appendChild(pair);
       dialsRow.appendChild(group);
-      fixedPresetRows[b.key][field.sub] = row;
+
+      var picker = field.kind === "duration" ? buildDurationPicker(wrapperId) : buildTimeOfDayPicker(wrapperId);
+      picker.set(state.fixed[b.key][field.sub]);
+      picker.onChange(function(v){
+        state.fixed[b.key][field.sub] = v;
+        saveState();
+        render();
+      });
     });
   });
 
