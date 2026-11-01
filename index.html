@@ -365,6 +365,11 @@
     position:absolute; left:0; right:0; top:48px; height:48px; border-radius:10px;
     background:var(--accent-soft); border:1.5px solid var(--accent); pointer-events:none;
   }
+  /* brief "blocked" flash: added to a field's own .wheel-pair wrapper (and removed again
+     ~450ms later) when the FIXED_BLOCKS.forEach wiring above rejects a settle that would push
+     school+sleep+other past 24h, so the rejection itself is visible rather than the wheel
+     silently snapping back with no feedback at all. Border-only — no layout shift. */
+  .wheel-pair.is-blocked .wheel{ border-color: var(--warning); transition: border-color .15s ease; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -698,6 +703,17 @@
     }
     if(key === "other") return f.length;
     return Math.max(0, f.end - f.start);
+  }
+  // what the FIXED_BLOCKS total (fixedSum, as computed in render()) WOULD be if
+  // state.fixed[key][sub] were hypothetically set to `value` — used by the wheel-picker wiring
+  // below to reject a settle before it's ever written to state.fixed, instead of accepting it
+  // and only warning after the fact via the fixedSum > DAY_MINUTES banner further down. Clones
+  // just enough of state.fixed (shallowClone, defined below) to stay non-mutating.
+  function fixedTotalWith(key, sub, value){
+    var clonedFixed = shallowClone(state.fixed);
+    clonedFixed[key] = shallowClone(state.fixed[key]);
+    clonedFixed[key][sub] = value;
+    return FIXED_BLOCKS.reduce(function(a, b){ return a + fixedBlockDuration(b.key, clonedFixed); }, 0);
   }
   // key -> colorVar lookup for FIXED_BLOCKS, used by the "いちにち" day-timeline so it can
   // reuse each block's own dot color without re-deriving it from FIXED_BLOCKS every call.
@@ -1946,6 +1962,19 @@
       var picker = field.kind === "duration" ? buildDurationPicker(wrapperId) : buildTimeOfDayPicker(wrapperId);
       picker.set(state.fixed[b.key][field.sub]);
       picker.onChange(function(v){
+        // block (not just warn) any settle that would push school+sleep+other past 24h —
+        // computed without mutating state.fixed via fixedTotalWith() above.
+        var total = fixedTotalWith(b.key, field.sub, v);
+        if(total > DAY_MINUTES){
+          // snap back to the last committed value. picker.set() only repositions scroll +
+          // repaints (see buildWheel()'s set()); it never re-fires onChange, so this can't
+          // recurse. Then flash the wheel border briefly so the rejection is still visible —
+          // silently reverting would just look like the tap did nothing.
+          picker.set(state.fixed[b.key][field.sub]);
+          pair.classList.add("is-blocked");
+          setTimeout(function(){ pair.classList.remove("is-blocked"); }, 450);
+          return;
+        }
         state.fixed[b.key][field.sub] = v;
         saveState();
         render();
