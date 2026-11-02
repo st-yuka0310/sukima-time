@@ -339,10 +339,16 @@
   .wheel-pair{ display:flex; justify-content:center; align-items:flex-start; gap:28px; margin:8px auto 0; flex:0 0 auto; }
   .wheel-col{ display:flex; flex-direction:column; align-items:center; gap:6px; }
   .wheel-col-label{ font-size:.76rem; font-weight:700; color:var(--ink-soft); }
+  /* non-scrolling wrapper buildWheel() creates around each ".wheel" — owns the box look
+     (background/border/radius) and clips it, and holds ".wheel-highlight" so the band stays
+     fixed in the viewport while ".wheel" itself scrolls past it. See buildWheel()'s comment. */
+  .wheel-frame{
+    position:relative; width:84px; height:144px; border-radius:14px; background:var(--bg);
+    border:1px solid var(--border); overflow:hidden;
+  }
   .wheel{
-    position:relative; width:84px; height:144px; overflow-y:scroll; scroll-snap-type:y mandatory;
-    scrollbar-width:none; -ms-overflow-style:none; border-radius:14px; background:var(--bg);
-    border:1px solid var(--border);
+    position:relative; width:100%; height:100%; overflow-y:scroll; scroll-snap-type:y mandatory;
+    scrollbar-width:none; -ms-overflow-style:none;
   }
   .wheel::-webkit-scrollbar{ display:none; }
   .wheel-track{ display:flex; flex-direction:column; }
@@ -369,7 +375,7 @@
      ~450ms later) when the FIXED_BLOCKS.forEach wiring above rejects a settle that would push
      school+sleep+other past 24h, so the rejection itself is visible rather than the wheel
      silently snapping back with no feedback at all. Border-only — no layout shift. */
-  .wheel-pair.is-blocked .wheel{ border-color: var(--warning); transition: border-color .15s ease; }
+  .wheel-pair.is-blocked .wheel-frame{ border-color: var(--warning); transition: border-color .15s ease; }
 
   /* suggestions */
   .empty-state{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; padding:12px 4px; color:var(--ink-soft); font-size:.88rem; }
@@ -1220,6 +1226,25 @@
     var onChangeCb = opts.onChange || null;
 
     var root = document.getElementById(containerId);
+    // Wrap root in a non-scrolling "frame" and move the highlight band there instead of
+    // inside root. root itself is the scrollable element — a highlight placed inside it (as
+    // this used to do) scrolls along with root's own content, since position:absolute only
+    // escapes normal-flow layout, not the scrolling context of its nearest scrollable
+    // containing block. That pinned the band at content-offset 48px forever, i.e. permanently
+    // over item index 0 (value "00") rather than over whatever row is actually centered, and
+    // its solid background painted over that item's (unselected, so faded) text, making "00"
+    // look like it had vanished whenever the wheel was scrolled away from its initial value.
+    // Putting the highlight in a separate, non-scrolling parent fixes it in the viewport, the
+    // way the design always intended.
+    var frame = document.createElement("div");
+    frame.className = "wheel-frame";
+    root.parentNode.insertBefore(frame, root);
+    var highlight = document.createElement("div");
+    highlight.className = "wheel-highlight";
+    highlight.setAttribute("aria-hidden", "true");
+    frame.appendChild(highlight);
+    frame.appendChild(root); // after the highlight, so root's own content paints on top of it
+
     root.innerHTML =
       '<div class="wheel-track">' +
         '<div class="wheel-pad"></div>' +
@@ -1227,8 +1252,7 @@
           return '<div class="wheel-item" data-value="' + v + '">' + format(v) + '</div>';
         }).join('') +
         '<div class="wheel-pad"></div>' +
-      '</div>' +
-      '<div class="wheel-highlight" aria-hidden="true"></div>';
+      '</div>';
     var items = Array.prototype.slice.call(root.querySelectorAll(".wheel-item"));
 
     var settledIndex = 0;
