@@ -886,6 +886,21 @@
     if(i === 6) return "var(--accent)";
     return "var(--ink)";
   }
+  // shared active/inactive color logic for every weekday pill/badge in the app (the routine
+  // weekday-picker chips and the routine list's own weekday badges) — both must read the same
+  // weekday the same way, so this is the one place that decides it, instead of each call site
+  // re-deciding inactive styling on its own (which previously drifted: the picker colored an
+  // inactive Sunday red/Saturday blue like its active state, while the list badge fell back to
+  // a flat muted gray for every inactive day regardless of which weekday it was).
+  function paintWeekdayColors(el, wi, active){
+    if(active){
+      el.style.background = weekdayColorVar(wi);
+      el.style.color = "var(--accent-ink)";
+    } else {
+      el.style.background = "var(--bg)";
+      el.style.color = weekdayColorVar(wi);
+    }
+  }
 
   function formatDateStr(d){
     return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate());
@@ -1800,13 +1815,7 @@
         badge.className = "routine-day-badge";
         var active = r.weekdays.indexOf(wi) !== -1;
         badge.textContent = wname;
-        if(active){
-          badge.style.color = "var(--accent-ink)";
-          badge.style.background = weekdayColorVar(wi);
-        } else {
-          badge.style.color = "var(--muted)";
-          badge.style.background = "var(--bg)";
-        }
+        paintWeekdayColors(badge, wi, active);
         days.appendChild(badge);
       });
       var del = makeDeleteButton(r.name, function(){
@@ -2217,13 +2226,7 @@
   var routineWeekdaySelected = emptyWeekdaySelection();
   function paintWeekdayChip(btn, wi, pressed){
     btn.setAttribute("aria-pressed", String(pressed));
-    if(pressed){
-      btn.style.background = weekdayColorVar(wi);
-      btn.style.color = "var(--accent-ink)";
-    } else {
-      btn.style.background = "var(--bg)";
-      btn.style.color = weekdayColorVar(wi);
-    }
+    paintWeekdayColors(btn, wi, pressed);
   }
   WEEKDAY_NAMES.forEach(function(wname, wi){
     var btn = document.createElement("button");
