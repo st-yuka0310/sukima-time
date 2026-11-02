@@ -164,6 +164,19 @@
      author styles always win over UA styles regardless of specificity (see #fixedCard, the
      only .card that's ever toggled via the hidden attribute). */
   .card[hidden]{ display:none; }
+  /* #fixedCard specifically must NOT use display:none while collapsed (higher specificity
+     than .card[hidden] above, so this wins): its wheel-pickers assign .scrollTop during
+     construction, and that assignment silently has no effect on a display:none element (no
+     layout box to scroll), so their real position never actually applied until the first time
+     this card was expanded — at which point the browser established their layout for the
+     first time, found their scroll position had never really been set, defaulted every one of
+     them to 0, and committed that 0 over every real stored value. Collapsing via max-height
+     instead keeps a real (if clipped-to-nothing) layout box at all times, so scrollTop sticks
+     from the moment each wheel is built. */
+  #fixedCard[hidden]{
+    display:flex; max-height:0; overflow:hidden; padding-top:0; padding-bottom:0; margin:0;
+    border-width:0; box-shadow:none; gap:0; pointer-events:none;
+  }
   .card h2{ font-size: 1.05rem; font-weight:700; color: var(--ink); }
   /* today-weekday is a pill; its JS-set `color` doubles as the border via currentColor, so Sun/Sat read clearly */
   .today-weekday{
@@ -709,7 +722,12 @@
   };
   // each block's own total duration is now derived from start/end (or start/length), never
   // stored directly: school/other are same-day subtraction, sleep wraps past midnight.
-  function fixedBlockDuration(key, fixed){
+  function fixedBlockDuration(key, fixed, weekday){
+    // school only ever occupies weekdays — Sunday(0)/Saturday(6) always read as 0 minutes,
+    // regardless of whatever start/end the wheels are set to, with no separate per-day
+    // toggle to configure: weekday-only is just how school behaves. sleep/other still apply
+    // every day.
+    if(key === "school" && (weekday === 0 || weekday === 6)) return 0;
     var f = fixed[key];
     if(key === "sleep"){
       var d = f.end - f.start;
@@ -730,7 +748,7 @@
     var clonedFixed = shallowClone(state.fixed);
     clonedFixed[key] = shallowClone(state.fixed[key]);
     clonedFixed[key][sub] = value;
-    return FIXED_BLOCKS.reduce(function(a, b){ return a + fixedBlockDuration(b.key, clonedFixed); }, 0);
+    return FIXED_BLOCKS.reduce(function(a, b){ return a + fixedBlockDuration(b.key, clonedFixed, state.day.weekday); }, 0);
   }
   // key -> colorVar lookup for FIXED_BLOCKS, used by the "いちにち" day-timeline so it can
   // reuse each block's own dot color without re-deriving it from FIXED_BLOCKS every call.
@@ -747,10 +765,10 @@
   // every gap left over once the (merged, so any accidental overlap between blocks collapses
   // into one range) union of occupied time is subtracted from the full 24h day. Never places
   // individual tasks — they carry no time-of-day data, only a duration.
-  function buildDayTimeline(fixed){
+  function buildDayTimeline(fixed, weekday){
     var occupied = [];
     FIXED_BLOCKS.forEach(function(b){
-      var duration = fixedBlockDuration(b.key, fixed);
+      var duration = fixedBlockDuration(b.key, fixed, weekday);
       if(duration <= 0) return;
       var start = fixed[b.key].start;
       var end = start + duration;
@@ -1492,8 +1510,8 @@
 
   // renders the "いちにち" tab's 24h bar + legend from buildDayTimeline()'s segment list.
   // Pure display: never touches state, so render() can call it unconditionally every time.
-  function renderDayline(fixed){
-    var segments = buildDayTimeline(fixed);
+  function renderDayline(fixed, weekday){
+    var segments = buildDayTimeline(fixed, weekday);
 
     var bar = daylineBarEl;
     bar.innerHTML = "";
@@ -1541,7 +1559,7 @@
   function render(){
     ensureToday();
     var tasks = state.day.tasks;
-    var fixedSum = FIXED_BLOCKS.reduce(function(a,b){ return a + fixedBlockDuration(b.key, state.fixed); }, 0);
+    var fixedSum = FIXED_BLOCKS.reduce(function(a,b){ return a + fixedBlockDuration(b.key, state.fixed, state.day.weekday); }, 0);
     // today's free-time budget: 24h minus school/sleep/meals. The chart below only ever
     // shows what happens inside this budget, never the fixed blocks that produced it.
     var freeTotal = Math.max(0, DAY_MINUTES - fixedSum);
@@ -1559,10 +1577,13 @@
     wdLabelEl.style.color = weekdayColorVar(wd);
 
     FIXED_BLOCKS.forEach(function(b){
-      fixedBlockTotalEls[b.key].textContent = "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed));
+      var isSchoolOff = b.key === "school" && (state.day.weekday === 0 || state.day.weekday === 6);
+      fixedBlockTotalEls[b.key].textContent = isSchoolOff
+        ? "きょうは おやすみ（へいじつだけ はんえい）"
+        : "あわせて " + formatMinutes(fixedBlockDuration(b.key, state.fixed, state.day.weekday));
     });
     fixedTotalEl.textContent = formatMinutes(fixedSum);
-    renderDayline(state.fixed);
+    renderDayline(state.fixed, state.day.weekday);
     fixedCardEl.hidden = !fixedCardExpanded;
     toggleFixedEl.setAttribute("aria-expanded", String(fixedCardExpanded));
     toggleFixedEl.textContent = "がっこう・すいみんなど： " + formatMinutes(fixedSum) + (fixedCardExpanded ? " ▴" : " ▾");
